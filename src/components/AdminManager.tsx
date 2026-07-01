@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Song, LyricLine, MelodyNote, SongCategory, SongDifficulty } from '../types';
+import { Song, LyricLine, MelodyNote, SongCategory, SongDifficulty, SongLanguage } from '../types';
+import { AppLanguage, translations } from '../utils/translations';
 import { 
   Plus, Trash2, Play, Pause, Save, RotateCcw, FileAudio, Music, 
   Settings2, HelpCircle, CheckCircle2, ChevronRight, Sliders, 
@@ -12,14 +13,17 @@ interface AdminManagerProps {
   onSaveCustomSongs: (songs: Song[]) => void;
   onExit: () => void;
   onSelectAndPlay: (song: Song) => void;
+  appLanguage: AppLanguage;
 }
 
 export default function AdminManager({ 
   customSongs, 
   onSaveCustomSongs, 
   onExit, 
-  onSelectAndPlay 
+  onSelectAndPlay,
+  appLanguage
 }: AdminManagerProps) {
+  const t = translations[appLanguage];
   
   // Navigation View Mode
   const [adminView, setAdminView] = useState<'list' | 'add' | 'sync'>('list');
@@ -33,6 +37,7 @@ export default function AdminManager({
   const [bpm, setBpm] = useState(80);
   const [difficulty, setDifficulty] = useState<SongDifficulty>('Médio');
   const [description, setDescription] = useState('');
+  const [language, setLanguage] = useState<SongLanguage>('pt');
   const [rawLyricsText, setRawLyricsText] = useState(
     "Exemplo de linha 1 do hino\nExemplo de linha 2 do hino\nExemplo de linha 3 do hino"
   );
@@ -55,6 +60,25 @@ export default function AdminManager({
 
   // Handle Drag & Drop of Audio Files
   const [isDragging, setIsDragging] = useState(false);
+
+  // Projection / singing stage settings
+  const [scoreMode, setScoreMode] = useState(() => {
+    return localStorage.getItem('adventist_voice_score_mode') || 'complete';
+  });
+  const [autoOpen, setAutoOpen] = useState(() => {
+    return localStorage.getItem('adventist_voice_auto_open') === 'true';
+  });
+
+  const broadcastSettings = (mode: string, open: boolean) => {
+    fetch('/api/projector/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        scoreDisplayMode: mode,
+        autoOpenProjector: open
+      })
+    }).catch(() => {});
+  };
 
   // Clean-up Audio URLs on unmount
   useEffect(() => {
@@ -401,7 +425,8 @@ export default function AdminManager({
       description: description.trim() || 'Música personalizada cadastrada através da área de criação.',
       lyrics: syncedLines,
       melody: generatedMelody,
-      audioFile: audioFile || undefined
+      audioFile: audioFile || undefined,
+      language: language
     };
 
     if (isEditMode) {
@@ -418,6 +443,7 @@ export default function AdminManager({
     setArtist('');
     setNumberOrYear('');
     setDescription('');
+    setLanguage('pt');
     setRawLyricsText('');
     setAudioFile(null);
     if (audioUrl) URL.revokeObjectURL(audioUrl);
@@ -447,6 +473,7 @@ export default function AdminManager({
     setBpm(song.bpm);
     setDifficulty(song.difficulty);
     setDescription(song.description || '');
+    setLanguage(song.language || 'pt');
     
     // Convert current list of sentences to plain-text separated lines
     const lyricsJoined = song.lyrics.map(l => l.text).join('\n');
@@ -485,6 +512,7 @@ export default function AdminManager({
     setBpm(80);
     setDifficulty('Médio');
     setDescription('');
+    setLanguage('pt');
     setRawLyricsText(
       "Exemplo de linha 1 do hino\nExemplo de linha 2 do hino\nExemplo de linha 3 do hino"
     );
@@ -507,14 +535,24 @@ export default function AdminManager({
         <div>
           <div className="flex items-center gap-2 mb-1">
             <span className="px-2 py-0.5 bg-amber-500/10 border border-amber-500/30 text-amber-500 text-[10px] font-black rounded-md uppercase tracking-widest leading-none">
-              Módulo Admin
+              {appLanguage === 'pt' ? 'Módulo Admin' : appLanguage === 'en' ? 'Admin Module' : 'Módulo Admin'}
             </span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-black font-display tracking-tight text-white m-0">
-            Painel de <span className="text-amber-500">Criação & Sincronia</span>
+            {appLanguage === 'pt' ? (
+              <>Painel de <span className="text-amber-500">Criação & Sincronia</span></>
+            ) : appLanguage === 'en' ? (
+              <>Creation & <span className="text-amber-500">Sync Panel</span></>
+            ) : (
+              <>Panel de <span className="text-amber-500">Creación y Sincronía</span></>
+            )}
           </h1>
           <p className="text-xs text-slate-400 font-medium leading-relaxed mt-1">
-            Adicione suas próprias músicas prediletas e crie marcações de tempo precisas para cantar no karaokê com feed de voz em tempo real.
+            {appLanguage === 'pt' 
+              ? 'Adicione suas próprias músicas prediletas e crie marcações de tempo precisas para cantar no karaokê com feed de voz em tempo real.'
+              : appLanguage === 'en'
+              ? 'Add your own favorite songs and create precise timestamps to sing in karaoke with real-time voice feedback.'
+              : 'Agrega tus propias canciones favoritas y crea marcas de tiempo precisas para cantar en karaoke con retroalimentación de voz en tiempo real.'}
           </p>
         </div>
         
@@ -523,7 +561,7 @@ export default function AdminManager({
           className="inline-flex items-center gap-2 rounded-xl bg-slate-900 border border-white/5 hover:border-white/15 px-4 py-2 text-xs font-bold text-slate-300 hover:text-white transition-all cursor-pointer shadow-md select-none"
         >
           <ArrowLeft className="h-4 w-4" />
-          Voltar às Músicas
+          {appLanguage === 'pt' ? 'Voltar às Músicas' : appLanguage === 'en' ? 'Back to Songs' : 'Volver a las Canciones'}
         </button>
       </div>
 
@@ -532,8 +570,18 @@ export default function AdminManager({
         <div className="space-y-6">
           <div className="flex justify-between items-center bg-slate-950/40 border border-white/5 p-4 rounded-xl">
             <div className="text-left font-display">
-              <h3 className="text-sm font-bold text-slate-200">Adicione e Sincronize</h3>
-              <p className="text-[11px] text-slate-400">Você tem <span className="text-amber-400 font-black">{customSongs.length}</span> músicas customizadas salvas localmente.</p>
+              <h3 className="text-sm font-bold text-slate-200">
+                {appLanguage === 'pt' ? 'Adicione e Sincronize' : appLanguage === 'en' ? 'Add & Synchronize' : 'Agrega y Sincroniza'}
+              </h3>
+              <p className="text-[11px] text-slate-400">
+                {appLanguage === 'pt' ? (
+                  <>Você tem <span className="text-amber-400 font-black">{customSongs.length}</span> músicas customizadas salvas localmente.</>
+                ) : appLanguage === 'en' ? (
+                  <>You have <span className="text-amber-400 font-black">{customSongs.length}</span> custom songs saved locally.</>
+                ) : (
+                  <>Tienes <span className="text-amber-400 font-black">{customSongs.length}</span> canciones personalizadas guardadas localmente.</>
+                )}
+              </p>
             </div>
             
             <button
@@ -541,7 +589,7 @@ export default function AdminManager({
               className="inline-flex items-center gap-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 px-4 py-2.5 text-xs font-black text-slate-950 shadow-lg shadow-amber-500/10 hover:shadow-amber-500/25 transition-all duration-300 cursor-pointer select-none"
             >
               <PlusCircle className="h-4 w-4" />
-              Nova Música
+              {appLanguage === 'pt' ? 'Nova Música' : appLanguage === 'en' ? 'New Song' : 'Nueva Canción'}
             </button>
           </div>
 
@@ -549,9 +597,11 @@ export default function AdminManager({
             <div className="p-4.5 border-b border-white/5 bg-slate-950/50 flex justify-between items-center">
               <span className="text-xs text-slate-400 uppercase tracking-wider font-extrabold flex items-center gap-1.5 font-display">
                 <Music className="h-4 w-4 text-amber-500" />
-                Músicas Customizadas ({customSongs.length})
+                {appLanguage === 'pt' ? 'Músicas Customizadas' : appLanguage === 'en' ? 'Custom Songs' : 'Canciones Personalizadas'} ({customSongs.length})
               </span>
-              <span className="text-[10px] text-slate-500 font-mono">ID ÚNICOS</span>
+              <span className="text-[10px] text-slate-500 font-mono">
+                {appLanguage === 'pt' ? 'ID ÚNICOS' : appLanguage === 'en' ? 'UNIQUE IDS' : 'IDS ÚNICOS'}
+              </span>
             </div>
 
             {customSongs.length === 0 ? (
@@ -559,15 +609,21 @@ export default function AdminManager({
                 <div className="h-12 w-12 rounded-full bg-slate-900/60 border border-white/5 flex items-center justify-center text-slate-500 mb-4 animate-bounce">
                   🎵
                 </div>
-                <h4 className="text-sm font-bold text-slate-300">Nenhuma Música Cadastrada</h4>
+                <h4 className="text-sm font-bold text-slate-300">
+                  {appLanguage === 'pt' ? 'Nenhuma Música Cadastrada' : appLanguage === 'en' ? 'No Songs Registered' : 'Ninguna Canción Registrada'}
+                </h4>
                 <p className="text-xs text-slate-500 max-w-sm mt-1 mb-4">
-                  Seja o primeiro a carregar um louvor da sua preferência! Você poderá inserir a letra e calibrar o ritmo passo a passo.
+                  {appLanguage === 'pt' 
+                    ? 'Seja o primeiro a carregar um louvor da sua preferência! Você poderá inserir a letra e calibrar o ritmo passo a passo.'
+                    : appLanguage === 'en'
+                    ? 'Be the first to load a song of your choice! You can input the lyrics and calibrate the rhythm step by step.'
+                    : '¡Sé el primero en cargar una alabanza de tu elección! Podrás ingresar la letra y calibrar el ritmo paso a paso.'}
                 </p>
                 <button
                   onClick={handleAddNewSongClick}
                   className="px-4 py-2 text-xs font-bold text-amber-400 border border-amber-500/20 hover:border-amber-400/50 hover:bg-amber-500/5 rounded-xl transition-all cursor-pointer"
                 >
-                  Criar Primeiro Louvor
+                  {appLanguage === 'pt' ? 'Criar Primeiro Louvor' : appLanguage === 'en' ? 'Create First Song' : 'Crear Primera Alabanza'}
                 </button>
               </div>
             ) : (
@@ -599,25 +655,25 @@ export default function AdminManager({
                       <button
                         onClick={() => onSelectAndPlay(song)}
                         className="p-2 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
-                        title="Ir para tela de Karaokê cantar agora"
+                        title={appLanguage === 'pt' ? 'Ir para tela de Karaokê' : appLanguage === 'en' ? 'Go to Karaoke stage' : 'Ir al escenario de Karaoke'}
                       >
                         <Play className="h-3.5 w-3.5 fill-current" />
-                        <span className="hidden sm:inline">Cantar</span>
+                        <span className="hidden sm:inline">{appLanguage === 'pt' ? 'Cantar' : appLanguage === 'en' ? 'Sing' : 'Cantar'}</span>
                       </button>
 
                       <button
                         onClick={() => handleEditCustomSong(song)}
                         className="p-2 bg-slate-800 hover:bg-slate-700 border border-white/10 hover:border-white/20 text-amber-400 hover:text-amber-300 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
-                        title="Editar letra, informações ou timings"
+                        title={appLanguage === 'pt' ? 'Editar' : appLanguage === 'en' ? 'Edit' : 'Editar'}
                       >
                         <Edit className="h-3.5 w-3.5" />
-                        <span className="hidden sm:inline">Editar</span>
+                        <span className="hidden sm:inline">{appLanguage === 'pt' ? 'Editar' : appLanguage === 'en' ? 'Edit' : 'Editar'}</span>
                       </button>
                       
                       <button
                         onClick={() => handleDeleteCustomSong(song.id, song.title)}
                         className="p-2 bg-red-500/10 hover:bg-red-500 border border-red-500/20 hover:border-red-500/50 text-red-400 hover:text-white rounded-lg transition-all cursor-pointer"
-                        title="Excluir música permanentemente"
+                        title={appLanguage === 'pt' ? 'Excluir permanentemente' : appLanguage === 'en' ? 'Delete permanently' : 'Eliminar permanentemente'}
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </button>
@@ -632,10 +688,119 @@ export default function AdminManager({
           <div className="p-4 bg-slate-950/60 border border-white/5 rounded-2xl flex items-start gap-3 w-full">
             <HelpCircle className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
             <div className="text-left">
-              <h5 className="text-xs font-black uppercase text-slate-200 tracking-wider">Como funciona a sincronia de voz?</h5>
+              <h5 className="text-xs font-black uppercase text-slate-200 tracking-wider">
+                {appLanguage === 'pt' 
+                  ? 'Como funciona a sincronia de voz?' 
+                  : appLanguage === 'en' 
+                  ? 'How does voice synchronization work?' 
+                  : '¿Cómo funciona la sincronización de voz?'}
+              </h5>
               <p className="text-[11px] text-slate-400 leading-relaxed mt-1">
-                Ao cadastrar sua música e marcar os tempos das estrofes, nosso sistema calcula e distribui os pesos das palavras automaticamente de forma matemática. Isso significa que as progressões visuais no karaokê se adaptam de forma sínpata, permitindo cantar de forma natural de forma similar às músicas oficiais!
+                {appLanguage === 'pt' 
+                  ? 'Ao cadastrar sua música e marcar os tempos das estrofes, nosso sistema calcula e distribui os pesos das palavras automaticamente de forma matemática. Isso significa que as progressões visuais no karaokê se adaptam de forma sínpata, permitindo cantar de forma natural de forma similar às músicas oficiais!'
+                  : appLanguage === 'en'
+                  ? 'By registering your song and marking the timings of each verse, our system calculates and distributes word durations mathematically. This means visual progress in the karaoke adapts fluidly, allowing you to sing naturally, similar to official tracks!'
+                  : '¡Al registrar tu canción y marcar los tiempos de las estrofas, nuestro sistema calcula y distribuye la duración de las palabras matemáticamente. Esto significa que las progresiones visuales en el karaoke se adaptan fluidamente, permitiéndote cantar de forma natural de manera similar a las pistas oficiales!'}
               </p>
+            </div>
+          </div>
+
+          {/* CONFIGURAÇÕES DE CANTO E PROJEÇÃO */}
+          <div className="glass-panel p-6 rounded-2xl border border-white/10 bg-slate-950/40 text-left space-y-4">
+            <div className="flex items-center gap-2.5 pb-3 border-b border-white/5">
+              <Sliders className="h-5 w-5 text-amber-500" />
+              <div>
+                <h3 className="font-display text-sm font-bold text-white uppercase tracking-tight">
+                  {t.generalConfig || 'Configurações de Tela'}
+                </h3>
+                <p className="text-[10px] text-slate-400 font-medium">
+                  {appLanguage === 'pt' 
+                    ? 'Controle o visual e comportamento da segunda tela ou projetor digital.' 
+                    : appLanguage === 'en'
+                    ? 'Control the look and behavior of the second screen or digital projector.'
+                    : 'Controla el aspecto y comportamiento de la segunda pantalla o proyector digital.'}
+                </p>
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Score Display Selector */}
+              <div className="space-y-2">
+                <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider">
+                  {t.scoreModeLabel || 'Exibição de Pontuação na Projeção'}
+                </label>
+                <p className="text-[11px] text-slate-400 leading-relaxed">
+                  {appLanguage === 'pt' 
+                    ? 'Defina o que aparecerá na tela do projetor ao concluir um louvor, ideal para criar expectativa.' 
+                    : appLanguage === 'en'
+                    ? 'Define what will appear on the projector screen upon finishing a song, ideal for building suspense.'
+                    : 'Define qué aparecerá en la pantalla del proyector al finalizar un canto, ideal para crear expectativa.'}
+                </p>
+                <select
+                  value={scoreMode}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setScoreMode(val);
+                    localStorage.setItem('adventist_voice_score_mode', val);
+                    broadcastSettings(val, autoOpen);
+                  }}
+                  className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-2.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500/50 cursor-pointer"
+                >
+                  <option value="complete">{t.scoreModeComplete || 'Completo (Pontos, Estrelas e Precisão %)'}</option>
+                  <option value="hidden">{t.scoreModeHidden || 'Ocultar Pontuação (Suspense total!)'}</option>
+                  <option value="stars_only">{t.scoreModeStars || 'Exibir apenas Estrelas'}</option>
+                  <option value="percentage_only">{t.scoreModePercentage || 'Exibir apenas Porcentagem de Precisão'}</option>
+                </select>
+              </div>
+
+              {/* Auto Open Second Screen Toggle */}
+              <div className="space-y-2">
+                <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider">
+                  {t.autoOpenLabel || 'Ativar Segunda Tela no Início'}
+                </label>
+                <p className="text-[11px] text-slate-400 leading-relaxed">
+                  {appLanguage === 'pt' 
+                    ? 'Ativa a abertura automática do projetor assim que você abrir o programa Adventist Voice.' 
+                    : appLanguage === 'en'
+                    ? 'Enables automatic opening of the projector as soon as you open the Adventist Voice program.'
+                    : 'Activa la apertura automática del proyector tan pronto como abras el programa Adventist Voice.'}
+                </p>
+                <div className="flex gap-2.5 pt-1">
+                  <button
+                    onClick={() => {
+                      setAutoOpen(true);
+                      localStorage.setItem('adventist_voice_auto_open', 'true');
+                      broadcastSettings(scoreMode, true);
+                    }}
+                    className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all border cursor-pointer ${
+                      autoOpen
+                        ? 'bg-amber-500 border-amber-500 text-slate-950 font-extrabold'
+                        : 'bg-slate-950 border-white/5 text-slate-400 hover:border-white/10 hover:text-slate-300'
+                    }`}
+                  >
+                    {t.autoOpenYes || 'Sim, abrir no início'}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setAutoOpen(false);
+                      localStorage.setItem('adventist_voice_auto_open', 'false');
+                      broadcastSettings(scoreMode, false);
+                    }}
+                    className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all border cursor-pointer ${
+                      !autoOpen
+                        ? 'bg-amber-500 border-amber-500 text-slate-950 font-extrabold'
+                        : 'bg-slate-950 border-white/5 text-slate-400 hover:border-white/10 hover:text-slate-300'
+                    }`}
+                  >
+                    {t.autoOpenNo || 'Não, abrir manual'}
+                  </button>
+                </div>
+                {autoOpen && (
+                  <p className="text-[10px] text-amber-500/80 leading-normal font-semibold italic mt-1.5 bg-amber-500/5 border border-amber-500/10 p-2 rounded-lg">
+                    {t.autoOpenNotice || '* Nota: A segunda tela será aberta no primeiro clique que você der na página por segurança do navegador. Certifique-se de permitir pop-ups.'}
+                  </p>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -647,16 +812,20 @@ export default function AdminManager({
         <div className="space-y-6">
           <div className="bg-slate-950/40 border border-white/5 p-4 rounded-xl flex items-center gap-2">
             <Edit className="h-4 w-4 text-amber-500" />
-            <span className="text-xs font-bold text-slate-300">Passo 1 de 2: Informações e Letra Completa</span>
+            <span className="text-xs font-bold text-slate-300">
+              {appLanguage === 'pt' ? 'Passo 1 de 2: Informações e Letra Completa' : appLanguage === 'en' ? 'Step 1 of 2: Information and Full Lyrics' : 'Paso 1 de 2: Información y Letra Completa'}
+            </span>
           </div>
 
           <div className="glass-panel p-6 rounded-2xl border border-white/5 space-y-5 text-left">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">Título do Louvor *</label>
+                <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
+                  {t.titleInput || 'Título do Louvor'} *
+                </label>
                 <input
                   type="text"
-                  placeholder="Ex: Como Agradecer"
+                  placeholder={appLanguage === 'pt' ? 'Ex: Como Agradecer' : appLanguage === 'en' ? 'Ex: Thankful Heart' : 'Ej: Corazón Agradecido'}
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   className="w-full bg-slate-950 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500"
@@ -664,10 +833,12 @@ export default function AdminManager({
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">Autor ou Cantor *</label>
+                <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
+                  {appLanguage === 'pt' ? 'Autor ou Cantor' : appLanguage === 'en' ? 'Author or Singer' : 'Autor o Cantante'} *
+                </label>
                 <input
                   type="text"
-                  placeholder="Ex: Ministério Jovem"
+                  placeholder={appLanguage === 'pt' ? 'Ex: Ministério Jovem' : appLanguage === 'en' ? 'Ex: Youth Ministry' : 'Ej: Ministerio Joven'}
                   value={artist}
                   onChange={(e) => setArtist(e.target.value)}
                   className="w-full bg-slate-950 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500"
@@ -677,22 +848,26 @@ export default function AdminManager({
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
-                <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">Categoria</label>
+                <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
+                  {t.category || 'Categoria'}
+                </label>
                 <select
                   value={category}
                   onChange={(e) => setCategory(e.target.value as SongCategory)}
                   className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500"
                 >
-                  <option value="Hinário">Hinário Adventista</option>
-                  <option value="CD Jovem">CD Jovem / Outros</option>
+                  <option value="Hinário">{t.hymnalTitle || 'Hinário Adventista'}</option>
+                  <option value="CD Jovem">{t.youthTitle || 'CD Jovem / Outros'}</option>
                 </select>
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">Número ou Ano</label>
+                <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
+                  {t.numberYearInput || 'Número ou Ano'}
+                </label>
                 <input
                   type="text"
-                  placeholder="Ex: Hino 102 ou CD 2005"
+                  placeholder={appLanguage === 'pt' ? 'Ex: Hino 102 ou CD 2005' : appLanguage === 'en' ? 'Ex: Hymn 102 or CD 2005' : 'Ej: Himno 102 o CD 2005'}
                   value={numberOrYear}
                   onChange={(e) => setNumberOrYear(e.target.value)}
                   className="w-full bg-slate-950 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500"
@@ -700,7 +875,9 @@ export default function AdminManager({
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">Andamento (BPM)</label>
+                <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
+                  {t.bpmInput || 'Andamento (BPM)'}
+                </label>
                 <input
                   type="number"
                   min={40}
@@ -714,30 +891,52 @@ export default function AdminManager({
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">Dificuldade da Voz</label>
+                <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
+                  {t.voiceDifficulty || 'Dificuldade da Voz'}
+                </label>
                 <div className="flex gap-2">
-                  {(['Fácil', 'Médio', 'Difícil'] as SongDifficulty[]).map((dif) => (
-                    <button
-                      key={dif}
-                      type="button"
-                      onClick={() => setDifficulty(dif)}
-                      className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all border ${
-                        difficulty === dif
-                          ? 'bg-amber-500 border-amber-500 text-slate-950'
-                          : 'bg-slate-950 border-white/10 text-slate-400 hover:border-white/20'
-                      }`}
-                    >
-                      {dif}
-                    </button>
-                  ))}
+                  {(['Fácil', 'Médio', 'Difícil'] as SongDifficulty[]).map((dif) => {
+                    const difLabel = dif === 'Fácil' ? (t.difficultyEasy || 'Fácil') : dif === 'Médio' ? (t.difficultyMedium || 'Médio') : (t.difficultyHard || 'Difícil');
+                    return (
+                      <button
+                        key={dif}
+                        type="button"
+                        onClick={() => setDifficulty(dif)}
+                        className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all border ${
+                          difficulty === dif
+                            ? 'bg-amber-500 border-amber-500 text-slate-950'
+                            : 'bg-slate-950 border-white/10 text-slate-400 hover:border-white/20'
+                        }`}
+                      >
+                        {difLabel}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
-              <div className="md:col-span-2">
-                <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">Uma breve descrição (Opcional)</label>
+              <div>
+                <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
+                  {appLanguage === 'pt' ? 'Idioma do Louvor' : appLanguage === 'en' ? 'Praise Language' : 'Idioma del Canto'}
+                </label>
+                <select
+                  value={language}
+                  onChange={(e) => setLanguage(e.target.value as SongLanguage)}
+                  className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500 cursor-pointer"
+                >
+                  <option value="pt">{t.langPt || 'Português 🇧🇷'}</option>
+                  <option value="en">{t.langEn || 'Inglês 🇺🇸'}</option>
+                  <option value="es">{t.langEs || 'Espanhol 🇪🇸'}</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1.5">
+                  {t.songDescription || 'Uma breve descrição (Opcional)'}
+                </label>
                 <input
                   type="text"
-                  placeholder="Ex: Linda canção do hinário sobre fé e confiança."
+                  placeholder={appLanguage === 'pt' ? 'Ex: Linda canção sobre fé.' : appLanguage === 'en' ? 'Ex: Beautiful song about faith.' : 'Ej: Hermosa canción sobre la fe.'}
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   className="w-full bg-slate-950 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500"
@@ -748,14 +947,14 @@ export default function AdminManager({
             {/* Lyrics block description */}
             <div className="pt-2 border-t border-white/5">
               <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1">
-                Letra do Louvor *
+                {t.lyricsInput || 'Letra do Louvor *'}
               </label>
               <p className="text-[10px] text-slate-500 mb-2 leading-none">
-                Insira cada estrofe/frase da música em uma linha separada. Não pule linhas vazias desnecessariamente.
+                {t.lyricsDesc || 'Insira cada estrofe/frase da música em uma linha separada. Não pule linhas vazias desnecessariamente.'}
               </p>
               <textarea
                 rows={8}
-                placeholder="Exemplo:&#10;Se a paz a mais doce me der gozo ter&#10;Se dor de cansar me vier&#10;Tu me fazes saber que ditoso com fé&#10;Tenho paz, com Jesus tenho paz"
+                placeholder={appLanguage === 'pt' ? 'Exemplo:\nSe a paz a mais doce me der gozo ter...' : appLanguage === 'en' ? 'Example:\nWhen peace like a river attendeth my way...' : 'Ejemplo:\nCuando en paz la corriente de la vida sigo...'}
                 value={rawLyricsText}
                 onChange={(e) => setRawLyricsText(e.target.value)}
                 className="w-full bg-slate-950 border border-white/10 rounded-xl p-4 text-sm text-white focus:outline-none focus:border-amber-500 font-mono leading-relaxed"
@@ -768,7 +967,7 @@ export default function AdminManager({
                 onClick={() => setAdminView('list')}
                 className="px-4 py-2.5 text-xs font-bold text-slate-400 hover:text-white transition-all cursor-pointer"
               >
-                Cancelar
+                {appLanguage === 'pt' ? 'Cancelar' : appLanguage === 'en' ? 'Cancel' : 'Cancelar'}
               </button>
 
               <button
@@ -776,7 +975,7 @@ export default function AdminManager({
                 onClick={handleProceedToSync}
                 className="inline-flex items-center gap-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 px-5 py-2.5 text-xs font-black text-slate-950 transition-all cursor-pointer shadow-lg"
               >
-                Ir para Sincronização
+                {appLanguage === 'pt' ? 'Ir para Sincronização' : appLanguage === 'en' ? 'Go to Sync' : 'Ir a Sincronización'}
                 <ArrowRight className="h-4 w-4" />
               </button>
             </div>
@@ -791,19 +990,26 @@ export default function AdminManager({
           <div className="bg-slate-950/40 border border-white/5 p-4 rounded-xl flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center gap-2">
               <Sliders className="h-4 w-4 text-amber-500" />
-              <span className="text-xs font-bold text-slate-300">Passo 2 de 2: Calibrador de Tempos & Sync</span>
+              <span className="text-xs font-bold text-slate-300">
+                {appLanguage === 'pt' ? 'Passo 2 de 2: Calibrador de Tempos & Sync' : appLanguage === 'en' ? 'Step 2 of 2: Time Calibration & Sync' : 'Paso 2 de 2: Calibrador de Tiempos y Sincronía'}
+              </span>
             </div>
             
             <button
               onClick={() => {
-                if (window.confirm("Abandonar calibração e voltar para as informações da música?")) {
+                const confirmMsg = appLanguage === 'pt' 
+                  ? 'Abandonar calibração e voltar para as informações da música?' 
+                  : appLanguage === 'en' 
+                  ? 'Abandon calibration and return to song information?' 
+                  : '¿Abandonar la calibración y volver a la información de la canción?';
+                if (window.confirm(confirmMsg)) {
                   stopVirtualTimer();
                   setAdminView('add');
                 }
               }}
               className="text-xs text-amber-400 hover:text-white font-bold cursor-pointer"
             >
-              ← Alterar Letra ou Título
+              {appLanguage === 'pt' ? '← Alterar Letra ou Título' : appLanguage === 'en' ? '← Change Lyrics or Title' : '← Cambiar Letra o Título'}
             </button>
           </div>
 

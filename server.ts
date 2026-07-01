@@ -21,15 +21,11 @@ async function startServer() {
 
   // API routes for projector sync
   app.post("/api/projector/sync", (req, res) => {
-    const { song, playState, countdown, score, songTime, currentUser } = req.body;
-    
-    if (song !== undefined) projectorState.song = song;
-    if (playState !== undefined) projectorState.playState = playState;
-    if (countdown !== undefined) projectorState.countdown = countdown;
-    if (score !== undefined) projectorState.score = score;
-    if (songTime !== undefined) projectorState.songTime = songTime;
-    if (currentUser !== undefined) projectorState.currentUser = currentUser;
-    
+    // Merge any properties received in the body to make the sync fully flexible
+    projectorState = {
+      ...projectorState,
+      ...req.body
+    };
     res.json({ success: true, state: projectorState });
   });
 
