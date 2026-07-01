@@ -89,6 +89,7 @@ export default function KaraokeStage({ song, onExit, currentUser, onSaveScore }:
   const [pitchFeedbackMessage, setPitchFeedbackMessage] = useState<string>('Ajustando voz...');
   const [pitchFeedbackColor, setPitchFeedbackColor] = useState<string>('text-slate-400');
   const [viewMode] = useState<'classic' | 'scoring'>('classic');
+  const [showMenusDuringPlay, setShowMenusDuringPlay] = useState(false);
 
   // Real-time microphone test state
   const [isTestingMic, setIsTestingMic] = useState(false);
@@ -327,6 +328,7 @@ export default function KaraokeStage({ song, onExit, currentUser, onSaveScore }:
     setNotesEvaluatedCount(0);
     setAverageAccuracyCollector([]);
     setSongTime(0);
+    setShowMenusDuringPlay(false);
 
     // Request micro-permission
     await startVoiceCapture();
@@ -358,6 +360,7 @@ export default function KaraokeStage({ song, onExit, currentUser, onSaveScore }:
   const broadcastFullState = () => {
     const state = currentStateRef.current;
     const curRealTime = backstageAudioRef.current ? backstageAudioRef.current.currentTime : state.songTime;
+    const scoreMode = localStorage.getItem('adventist_voice_score_mode') || 'complete';
     
     const stateData = {
       type: 'sync',
@@ -366,7 +369,8 @@ export default function KaraokeStage({ song, onExit, currentUser, onSaveScore }:
       countdown: state.countdown,
       score: state.score,
       songTime: curRealTime,
-      currentUser: currentUser
+      currentUser: currentUser,
+      scoreDisplayMode: scoreMode
     };
 
     // Direct Window reference updates (highly robust for sandboxed iframes)
@@ -1011,7 +1015,12 @@ export default function KaraokeStage({ song, onExit, currentUser, onSaveScore }:
   return (
     <div 
       ref={stageContainerRef}
-      className={`relative h-full min-h-0 w-full bg-slate-950/95 backdrop-blur-xl ${isFullscreen ? '' : 'rounded-2xl sm:rounded-3xl border border-white/10'} overflow-hidden shadow-2xl flex flex-col justify-between`}
+      onClick={() => {
+        if (playState === 'playing') {
+          setShowMenusDuringPlay(prev => !prev);
+        }
+      }}
+      className={`relative h-full min-h-0 w-full bg-slate-950/95 backdrop-blur-xl ${isFullscreen ? '' : 'rounded-2xl sm:rounded-3xl border border-white/10'} overflow-hidden shadow-2xl flex flex-col justify-between ${playState === 'playing' ? 'cursor-pointer' : ''}`}
     >
       {stageAudioUrl && (
         <audio
@@ -1025,7 +1034,12 @@ export default function KaraokeStage({ song, onExit, currentUser, onSaveScore }:
       )}
       
       {/* Top Controls Header Bar */}
-      <div className="p-4 bg-white/[0.02] border-b border-white/5 flex items-center justify-between z-10 relative">
+      <div 
+        onClick={(e) => e.stopPropagation()}
+        className={`p-4 bg-white/[0.02] border-b border-white/5 flex items-center justify-between z-10 relative transition-all duration-300 ${
+          playState === 'playing' && !showMenusDuringPlay ? 'opacity-0 h-0 p-0 overflow-hidden border-none pointer-events-none' : 'opacity-100'
+        }`}
+      >
         <div className="flex items-center gap-3">
           <button
             onClick={() => {
@@ -1078,22 +1092,22 @@ export default function KaraokeStage({ song, onExit, currentUser, onSaveScore }:
       </div>
 
       {/* Main Screen Layout Container */}
-      <div className={`relative flex-1 flex flex-col p-4 w-full h-full ${playState === 'playing' ? 'items-stretch justify-stretch' : 'justify-center items-center'}`}>
+      <div className={`relative flex-1 min-h-0 flex flex-col p-4 w-full ${playState === 'playing' ? 'items-stretch justify-stretch' : 'justify-center items-center'}`}>
         
         {/* PlayState == IDLE display initial start button */}
         {playState === 'idle' && (
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="text-center w-full max-w-xl p-6 glass-panel rounded-2xl shadow-2xl space-y-6"
+            className="text-center w-full max-w-xl max-h-full overflow-y-auto p-4 sm:p-6 glass-panel rounded-2xl shadow-2xl space-y-4 sm:space-y-5 scrollbar-thin"
           >
-            <div className="mx-auto h-16 w-16 bg-amber-500/10 text-amber-500 rounded-full flex items-center justify-center border border-amber-500/20 shadow-lg shadow-amber-950/30 animate-pulse">
-              <Mic className="h-8 w-8" />
+            <div className="mx-auto h-12 w-12 sm:h-16 sm:w-16 bg-amber-500/10 text-amber-500 rounded-full flex items-center justify-center border border-amber-500/20 shadow-lg shadow-amber-950/30 animate-pulse shrink-0">
+              <Mic className="h-6 w-6 sm:h-8 sm:w-8" />
             </div>
 
-            <div className="space-y-2">
-              <h4 className="text-xl font-display font-extrabold text-white">Preparar Microfone</h4>
-              <p className="text-xs text-slate-300 leading-relaxed serif-font italic">
+            <div className="space-y-1 sm:space-y-2">
+              <h4 className="text-lg sm:text-xl font-display font-extrabold text-white">Preparar Microfone</h4>
+              <p className="text-[11px] sm:text-xs text-slate-300 leading-relaxed serif-font italic">
                 Recomendamos conectar fones de ouvido para o aplicativo capturar unicamente a sua voz e não as notas de acompanhamento do teclado vocal.
               </p>
             </div>
@@ -1125,7 +1139,7 @@ export default function KaraokeStage({ song, onExit, currentUser, onSaveScore }:
                 </button>
               </div>
 
-              {isTestingMic ? (
+              {isTestingMic && (
                 <div className="space-y-3 animate-fade-in bg-slate-950/40 p-3 rounded-lg border border-white/5">
                   {/* Volume level indicator bar */}
                   <div className="space-y-1">
@@ -1182,10 +1196,6 @@ export default function KaraokeStage({ song, onExit, currentUser, onSaveScore }:
                     </p>
                   )}
                 </div>
-              ) : (
-                <p className="text-[11px] text-slate-400 serif-font italic leading-relaxed">
-                  Deseja testar se a sua voz está sendo lida pelo site antes de cantar? Clique no botão acima para abrir o medidor e garantir que as notas respondem ao seu tom.
-                </p>
               )}
             </div>
 
@@ -1235,7 +1245,7 @@ export default function KaraokeStage({ song, onExit, currentUser, onSaveScore }:
 
             <button
               onClick={handleStartKaraoke}
-              className="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-500 text-slate-950 font-black py-4 px-6 rounded-xl transition-all active:scale-[0.98] shadow-lg shadow-amber-500/15 flex items-center justify-center gap-2 cursor-pointer text-xs uppercase tracking-widest"
+              className="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-500 text-slate-950 font-black py-3 sm:py-4 px-6 rounded-xl transition-all active:scale-[0.98] shadow-lg shadow-amber-500/15 flex items-center justify-center gap-2 cursor-pointer text-xs uppercase tracking-widest shrink-0"
             >
               <Play className="h-4 w-4 fill-current" />
               INICIAR LOUVOR
@@ -1636,7 +1646,7 @@ export default function KaraokeStage({ song, onExit, currentUser, onSaveScore }:
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              className="text-center max-w-lg p-6 glass-panel rounded-2xl shadow-2xl space-y-6"
+              className="text-center max-w-lg w-full max-h-full overflow-y-auto p-4 sm:p-6 glass-panel rounded-2xl shadow-2xl space-y-4 sm:space-y-6"
             >
               <div className="inline-flex h-16 w-16 items-center justify-center rounded-full bg-amber-500/10 border border-amber-400/30 text-amber-500 block mx-auto">
                 <Trophy className="h-8 w-8 text-amber-400" />
@@ -1706,7 +1716,12 @@ export default function KaraokeStage({ song, onExit, currentUser, onSaveScore }:
       </div>
 
       {/* Footer bar containing sound and microphone indicators */}
-      <div className="p-4 bg-slate-950 border-t border-slate-900/80 flex items-center justify-between text-xs text-slate-400">
+      <div 
+        onClick={(e) => e.stopPropagation()}
+        className={`p-4 bg-slate-950 border-t border-slate-900/80 flex items-center justify-between text-xs text-slate-400 transition-all duration-300 ${
+          playState === 'playing' && !showMenusDuringPlay ? 'opacity-0 h-0 p-0 overflow-hidden border-none pointer-events-none' : 'opacity-100'
+        }`}
+      >
         
         {/* Toggle Guide synth and toggle mic simulation */}
         <div className="flex items-center gap-4">

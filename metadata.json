@@ -1,5 +1,5 @@
 {
-  "name": "Louvor Karaokê",
+  "name": "Adventist Voice",
   "description": "Karaokê adventista com detecção de afinação por microfone em tempo real, pontuação e histórico competitivo.",
   "requestFramePermissions": ["microphone"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]

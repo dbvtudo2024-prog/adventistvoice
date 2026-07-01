@@ -1,17 +1,30 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Song } from '../types';
-import { Tv, Music, RefreshCw, Trophy, Maximize, Minimize } from 'lucide-react';
+import { Tv, Music, RefreshCw, Trophy, Maximize, Minimize, Star, Sparkles, Award } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { AppLanguage, translations } from '../utils/translations';
 
 export default function ProjectorView() {
+  const [appLanguage, setAppLanguage] = useState<AppLanguage>(() => {
+    return (localStorage.getItem('adventist_voice_lang') as AppLanguage) || 'pt';
+  });
+  const t = translations[appLanguage];
   const [song, setSong] = useState<Song | null>(null);
   const [songTime, setSongTime] = useState<number>(0);
-  const [playState, setPlayState] = useState<'idle' | 'countdown' | 'playing' | 'calculating' | 'completed'>('idle');
+  const [playState, setPlayState] = useState<'idle' | 'countdown' | 'playing' | 'calculating' | 'completed' | 'leaderboard'>('idle');
   const [countdown, setCountdown] = useState<number>(3);
   const [score, setScore] = useState<number>(0);
   const [currentUser, setCurrentUser] = useState<string>('');
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
   const projectorContainerRef = useRef<HTMLDivElement>(null);
+
+  // Sync parameters
+  const [leaderboardData, setLeaderboardData] = useState<any[]>([]);
+  const [leaderboardReveal, setLeaderboardReveal] = useState<boolean>(false);
+  const [scoreDisplayMode, setScoreDisplayMode] = useState<string>(() => {
+    return localStorage.getItem('adventist_voice_score_mode') || 'complete';
+  });
+  const [revealKey, setRevealKey] = useState<number>(Date.now());
 
   // Synchronize state from primary controller window
   useEffect(() => {
@@ -24,6 +37,14 @@ export default function ProjectorView() {
         if (data.countdown !== undefined) setCountdown(data.countdown);
         if (data.score !== undefined) setScore(data.score);
         if (data.currentUser !== undefined) setCurrentUser(data.currentUser);
+        if (data.leaderboardData !== undefined) setLeaderboardData(data.leaderboardData);
+        if (data.leaderboardReveal !== undefined) setLeaderboardReveal(data.leaderboardReveal);
+        if (data.scoreDisplayMode !== undefined) setScoreDisplayMode(data.scoreDisplayMode);
+        if (data.revealKey !== undefined) setRevealKey(data.revealKey);
+        if (data.appLanguage !== undefined) {
+          setAppLanguage(data.appLanguage);
+          localStorage.setItem('adventist_voice_lang', data.appLanguage);
+        }
       } else if (data.type === 'time') {
         if (data.songTime !== undefined) setSongTime(data.songTime);
       } else if (data.type === 'exit') {
@@ -210,7 +231,7 @@ export default function ProjectorView() {
         </div>
 
         {/* Absolute Centered Singer Badge */}
-        {currentUser && (
+        {currentUser && playState !== 'leaderboard' && (
           <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none hidden sm:flex items-center justify-center">
             <div className="flex items-center gap-1.5 px-3 py-1 bg-amber-500/10 border border-amber-500/20 rounded-full animate-pulse">
               <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping" />
@@ -222,7 +243,7 @@ export default function ProjectorView() {
         )}
 
         <div className="flex items-center gap-3">
-          {song && (
+          {song && playState !== 'leaderboard' && (
             <div className="text-right flex flex-col items-end mr-1">
               <span className="text-xs font-bold text-amber-400 font-display block truncate max-w-[200px] uppercase">
                 {song.title}
@@ -260,16 +281,16 @@ export default function ProjectorView() {
                 <Music className="h-10 w-10 text-amber-400/80" />
               </div>
               <div className="space-y-1.5">
-                <h3 className="text-2xl sm:text-3xl font-display font-black text-white tracking-tight uppercase">
-                  PROJETOR ATIVO
+                <h3 className="text-3xl sm:text-5xl font-display font-black text-amber-400 tracking-tight uppercase animate-pulse">
+                  {t.awaitingSinger}
                 </h3>
                 <p className="text-sm text-slate-400 leading-relaxed max-w-sm mx-auto serif-font italic">
-                  Aguardando o início do louvor no painel de controle principal para sincronizar os slides...
+                  {t.projectorAwaitingDesc}
                 </p>
               </div>
               <div className="inline-flex items-center gap-1.5 text-[10px] text-emerald-400 font-bold uppercase tracking-widest bg-emerald-500/5 border border-emerald-500/10 px-3 py-1.5 rounded-full">
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-                Conectado em Tempo Real
+                {t.connectedRealTime}
               </div>
             </motion.div>
           )}
@@ -376,34 +397,223 @@ export default function ProjectorView() {
           )}
 
           {/* STATE: COMPLETED */}
-          {playState === 'completed' && (
-            <motion.div
-              key="completed-view"
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0 }}
-              className="text-center space-y-6 max-w-lg p-8 bg-slate-950/40 border border-white/5 rounded-2xl shadow-2xl"
-            >
-              <div className="inline-flex h-16 w-16 items-center justify-center rounded-full bg-amber-500/10 border border-amber-400/30 text-amber-500 block mx-auto animate-bounce">
-                <Trophy className="h-8 w-8 text-amber-400" />
-              </div>
+          {playState === 'completed' && (() => {
+            const finalAccuracy = Math.min(100, Math.round((score / 10000) * 100));
+            return (
+              <motion.div
+                key="completed-view"
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0 }}
+                className="text-center space-y-6 max-w-lg p-8 bg-slate-950/40 border border-white/5 rounded-2xl shadow-2xl w-full"
+              >
+                <div className="inline-flex h-16 w-16 items-center justify-center rounded-full bg-amber-500/10 border border-amber-400/30 text-amber-500 block mx-auto animate-bounce">
+                  <Trophy className="h-8 w-8 text-amber-400" />
+                </div>
 
-              <div className="space-y-1 text-center">
-                <h3 className="text-3xl font-display font-extrabold text-white uppercase tracking-tight">Louvor Concluído!</h3>
-                {currentUser && (
-                  <p className="text-sm text-amber-400 font-bold uppercase tracking-wider">Excelente louvor, {currentUser}!</p>
+                <div className="space-y-1 text-center">
+                  <h3 className="text-3xl font-display font-extrabold text-white uppercase tracking-tight">Louvor Concluído!</h3>
+                  {currentUser && (
+                    <p className="text-sm text-amber-400 font-bold uppercase tracking-wider">Excelente louvor, {currentUser}!</p>
+                  )}
+                  <p className="text-sm text-slate-300 serif-font italic">"Bom é cantar louvores ao nosso Deus..."</p>
+                </div>
+
+                {/* CONDITIONAL RENDER BY SCORE DISPLAY MODE */}
+                {scoreDisplayMode === 'hidden' ? (
+                  <div className="p-6 bg-slate-950 rounded-xl border border-white/5 text-center flex flex-col items-center justify-center space-y-2">
+                    <span className="text-[11px] uppercase font-bold text-amber-500 tracking-wider animate-pulse font-display">SUSPENSE ATIVO</span>
+                    <h4 className="text-lg font-bold text-white">Pontuação Ocultada</h4>
+                    <p className="text-xs text-slate-400 serif-font italic">O resultado final foi ocultado nesta tela para suspense! Aguarde o veredito oficial no painel.</p>
+                  </div>
+                ) : scoreDisplayMode === 'stars_only' ? (
+                  <div className="p-6 bg-slate-950 rounded-xl border border-white/5 text-center space-y-3">
+                    <span className="text-[10px] uppercase font-bold text-slate-500 block">Classificação por Estrelas</span>
+                    <div className="flex gap-2.5 justify-center py-2 text-2xl">
+                      {Array.from({ length: 5 }).map((_, i) => {
+                        let active = false;
+                        if (i === 0) active = finalAccuracy >= 0;
+                        else if (i === 1) active = finalAccuracy >= 20;
+                        else if (i === 2) active = finalAccuracy >= 40;
+                        else if (i === 3) active = finalAccuracy >= 60;
+                        else if (i === 4) active = finalAccuracy >= 80;
+
+                        return (
+                          <Star
+                            key={i}
+                            className={`h-7 w-7 ${
+                              active ? 'text-amber-400 fill-amber-400 animate-pulse' : 'text-slate-800'
+                            }`}
+                          />
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : scoreDisplayMode === 'percentage_only' ? (
+                  <div className="p-6 bg-slate-950 rounded-xl border border-white/5 text-center space-y-2">
+                    <span className="text-[10px] uppercase font-bold text-slate-500 block">Precisão de Canto</span>
+                    <span className="text-4xl font-mono font-black text-emerald-400 drop-shadow-[0_0_15px_rgba(16,185,129,0.3)] block">{finalAccuracy}%</span>
+                    <span className="text-[11px] text-slate-400 font-medium font-sans">Sintonização com o tom original</span>
+                  </div>
+                ) : (
+                  /* DEFAULT: COMPLETE DISPLAY */
+                  <div className="space-y-4">
+                    <div className="p-4 bg-slate-950 rounded-xl border border-white/5 text-center">
+                      <span className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Pontuação do Cantor</span>
+                      <span className="text-3xl font-mono font-black text-amber-400 drop-shadow-[0_0_15px_rgba(245,158,11,0.3)]">{score} pts</span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="p-3 bg-slate-950/60 rounded-lg border border-white/5 text-center">
+                        <span className="text-[9px] uppercase font-bold text-slate-400 block mb-1">Precisão</span>
+                        <span className="text-base font-mono font-black text-emerald-400">{finalAccuracy}%</span>
+                      </div>
+                      <div className="p-3 bg-slate-950/60 rounded-lg border border-white/5 text-center flex flex-col justify-center items-center">
+                        <span className="text-[9px] uppercase font-bold text-slate-400 block mb-1">Estrelas</span>
+                        <div className="flex gap-0.5">
+                          {Array.from({ length: 5 }).map((_, i) => {
+                            let active = false;
+                            if (i === 0) active = finalAccuracy >= 0;
+                            else if (i === 1) active = finalAccuracy >= 20;
+                            else if (i === 2) active = finalAccuracy >= 40;
+                            else if (i === 3) active = finalAccuracy >= 60;
+                            else if (i === 4) active = finalAccuracy >= 80;
+
+                            return (
+                              <Star
+                                key={i}
+                                className={`h-3 w-3 ${
+                                  active ? 'text-amber-400 fill-amber-400' : 'text-slate-800'
+                                }`}
+                              />
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 )}
-                <p className="text-sm text-slate-300 serif-font italic">"Bom é cantar louvores ao nosso Deus..."</p>
+
+                <span className="text-xs text-amber-500/70 font-semibold block uppercase tracking-wider animate-pulse font-display">
+                  Glória a Deus pelo seu louvor! 🙌
+                </span>
+              </motion.div>
+            );
+          })()}
+
+          {/* STATE: LEADERBOARD - Dramatic full-screen display with de baixo para cima reveal */}
+          {playState === 'leaderboard' && (
+            <motion.div
+              key={`leaderboard-view-${revealKey}`}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="w-full max-w-4xl mx-auto space-y-8"
+            >
+              <div className="text-center space-y-2">
+                <div className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-amber-500/10 border border-amber-400/30 text-amber-400 mb-2 animate-bounce">
+                  <Trophy className="h-6 w-6" />
+                </div>
+                <h2 className="text-4xl font-display font-black text-white tracking-tight uppercase">
+                  CLASSIFICAÇÃO GERAL <span className="text-amber-400">DE LOUVOR</span>
+                </h2>
+                <p className="text-sm text-slate-400 serif-font italic max-w-md mx-auto">
+                  Quem louva a Deus com o coração já é um vencedor! Confira os destaques da jornada.
+                </p>
               </div>
 
-              <div className="p-4 bg-slate-950 rounded-xl border border-white/5 text-center">
-                <span className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Pontuação do Cantor</span>
-                <span className="text-3xl font-mono font-black text-amber-400 drop-shadow-[0_0_15px_rgba(245,158,11,0.3)]">{score} pts</span>
-              </div>
+              {/* Leaderboard Table / Cards layout */}
+              <div className="bg-slate-950/40 border border-white/5 rounded-2xl overflow-hidden shadow-2xl p-6">
+                {leaderboardData.length === 0 ? (
+                  <div className="py-12 text-center text-slate-500 text-sm italic">
+                    Nenhum competidor registrado no momento...
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {leaderboardData.slice(0, 7).map((competitor, idx) => {
+                      const rank = idx + 1;
+                      const scoreVal = Math.max(competitor.hymnalHighscore || 0, competitor.youthHighscore || 0);
+                      
+                      // Calculate delay based on "reveal from bottom to top"
+                      const totalToShow = Math.min(leaderboardData.length, 7);
+                      const animationDelay = leaderboardReveal 
+                        ? (totalToShow - 1 - idx) * 1.5
+                        : idx * 0.15;
 
-              <span className="text-xs text-amber-500/70 font-semibold block uppercase tracking-wider animate-pulse font-display">
-                Glória a Deus pelo seu louvor! 🙌
-              </span>
+                      const rankColor = rank === 1 
+                        ? 'bg-amber-400 text-slate-950 font-black' 
+                        : rank === 2 
+                        ? 'bg-slate-300 text-slate-950 font-black' 
+                        : rank === 3 
+                        ? 'bg-amber-700 text-white font-black' 
+                        : 'bg-slate-900 text-slate-400 border border-white/5';
+
+                      return (
+                        <motion.div
+                          key={competitor.name}
+                          initial={{ opacity: 0, y: 30, scale: 0.98 }}
+                          animate={{ 
+                            opacity: 1, 
+                            y: 0, 
+                            scale: 1,
+                            transition: {
+                              delay: animationDelay,
+                              duration: 0.6,
+                              ease: "easeOut"
+                            }
+                          }}
+                          className={`p-4 flex items-center justify-between rounded-xl border transition-all ${
+                            rank === 1 
+                              ? 'bg-amber-400/5 border-amber-400/20 shadow-[0_0_20px_rgba(245,158,11,0.05)]' 
+                              : 'bg-slate-950/60 border-white/5 hover:border-white/10'
+                          }`}
+                        >
+                          <div className="flex items-center gap-4">
+                            {/* Position Badge */}
+                            <span className={`h-8 w-8 rounded-full flex items-center justify-center text-sm font-black font-mono shadow-md ${rankColor}`}>
+                              {rank}
+                            </span>
+                            
+                            {/* Avatar Icon */}
+                            <span className="text-2xl h-10 w-10 bg-slate-900/60 rounded-xl border border-white/5 flex items-center justify-center">
+                              {competitor.avatar}
+                            </span>
+
+                            {/* Competitor Name */}
+                            <div className="text-left">
+                              <span className="text-base font-bold text-white uppercase tracking-tight block">
+                                {competitor.name}
+                              </span>
+                              {competitor.isCustom ? (
+                                <span className="text-[9px] font-bold text-amber-500 uppercase tracking-widest bg-amber-500/5 px-1.5 py-0.5 rounded border border-amber-500/10 block w-fit leading-none mt-1 font-display">Visitante</span>
+                              ) : (
+                                <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest block leading-none mt-1 font-display">Membro Vocal</span>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Score info */}
+                          <div className="text-right flex items-center gap-4">
+                            <div className="hidden sm:block text-right">
+                              <span className="text-[9px] uppercase font-bold text-slate-500 block">Recordes (Hino / Jovem)</span>
+                              <span className="text-xs font-semibold text-slate-400 block font-mono">
+                                {competitor.hymnalHighscore || 0} pts / {competitor.youthHighscore || 0} pts
+                              </span>
+                            </div>
+
+                            <div className="px-4 py-2 bg-slate-950 rounded-lg border border-white/5 min-w-[100px] text-center">
+                              <span className="text-[9px] uppercase font-bold text-slate-500 block mb-0.5">Pontos Máx.</span>
+                              <span className={`text-lg font-mono font-black ${rank === 1 ? 'text-amber-400' : 'text-slate-200'}`}>
+                                {scoreVal} pts
+                              </span>
+                            </div>
+                          </div>
+                        </motion.div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             </motion.div>
           )}
         </AnimatePresence>

@@ -6,8 +6,9 @@ import Leaderboard from './components/Leaderboard';
 import KaraokeStage from './components/KaraokeStage';
 import AdminManager from './components/AdminManager';
 import ProjectorView from './components/ProjectorView';
-import { Mic, Trophy, Music, User, Flame, Disc, Shield, Settings2, Edit3, Check } from 'lucide-react';
-import { motion } from 'motion/react';
+import { Mic, Trophy, Music, User, Flame, Disc, Shield, Settings2, Edit3, Check, ChevronUp } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import { AppLanguage, translations } from './utils/translations';
 
 export default function App() {
   const isProjector = typeof window !== 'undefined' && window.location.search.includes('projector=true');
@@ -18,6 +19,30 @@ export default function App() {
 
   const [view, setView] = useState<'home' | 'singing' | 'leaderboard' | 'admin'>('home');
   const [selectedSong, setSelectedSong] = useState<Song | null>(null);
+  
+  // App language state
+  const [appLanguage, setAppLanguage] = useState<AppLanguage>(() => {
+    try {
+      return (localStorage.getItem('adventist_voice_lang') as AppLanguage) || 'pt';
+    } catch (e) {
+      return 'pt';
+    }
+  });
+  const t = translations[appLanguage];
+
+  // Scroll to Top state for mobile
+  const [showScrollTop, setShowScrollTop] = useState(false);
+  useEffect(() => {
+    const handleScroll = () => {
+      if (window.scrollY > 300) {
+        setShowScrollTop(true);
+      } else {
+        setShowScrollTop(false);
+      }
+    };
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
   
   // Local Data State
   const [scoreHistory, setScoreHistory] = useState<ScoreRecord[]>([]);
@@ -84,6 +109,25 @@ export default function App() {
       }
     } catch (e) {
       console.error("Local storage lookup failed safely.", e);
+    }
+  }, []);
+
+  // 1b. Automatic Second Screen Open (Projector) on startup / first click interaction
+  useEffect(() => {
+    const autoOpen = localStorage.getItem('adventist_voice_auto_open') === 'true';
+    if (autoOpen) {
+      const handleFirstInteraction = () => {
+        window.removeEventListener('click', handleFirstInteraction);
+        
+        // Prevent multiple opens in the same session
+        if (!sessionStorage.getItem('adventist_projector_opened')) {
+          sessionStorage.setItem('adventist_projector_opened', 'true');
+          const url = window.location.origin + window.location.pathname + '?projector=true';
+          window.open(url, 'adventist_voice_projector', 'width=1280,height=720,menubar=no,status=no,titlebar=no,toolbar=no,location=no');
+        }
+      };
+      window.addEventListener('click', handleFirstInteraction);
+      return () => window.removeEventListener('click', handleFirstInteraction);
     }
   }, []);
 
@@ -297,23 +341,40 @@ export default function App() {
               <h2 className="font-display text-xl font-bold tracking-tight text-white leading-none">
                 ADVENTIST <span className="text-amber-500 font-black">VOICE</span>
               </h2>
-              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest block mt-0.5">LOUVORES ADVENTISTAS</span>
+              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest block mt-0.5">
+                {appLanguage === 'pt' ? 'LOUVORES ADVENTISTAS' : appLanguage === 'en' ? 'ADVENTIST PRAISES' : 'ALABANZAS ADVENTISTAS'}
+              </span>
             </div>
           </div>
 
           {/* User Profile name card and Tab layout selectors */}
-          <div className="flex flex-wrap items-center gap-4">
+          <div className="flex flex-wrap items-center gap-3 sm:gap-4 justify-end">
             
-            {/* Top Stat Summary Pills */}
-            <div className="hidden md:flex items-center gap-3 text-xs glass-panel px-3 py-1.5 rounded-xl shadow-inner shadow-white/5">
-              <span className="flex items-center gap-1 text-slate-300">
-                🏆 Recorde: <strong className="text-amber-400 font-extrabold">{userHighestScore} pts</strong>
-              </span>
-              <div className="w-[1px] h-3 bg-white/10" />
-              <span className="flex items-center gap-1 text-slate-300">
-                ⭐ Estrelas: <strong className="text-amber-400">★ {totalGainedStars}</strong>
-              </span>
+            {/* Language Selector Dropdown */}
+            <div className="glass-panel px-2.5 py-1.5 rounded-xl flex items-center gap-1.5 shadow-md border border-white/5 hover:border-white/10 transition-colors">
+              <span className="text-xs">🌐</span>
+              <select
+                value={appLanguage}
+                onChange={(e) => {
+                  const newLang = e.target.value as AppLanguage;
+                  setAppLanguage(newLang);
+                  localStorage.setItem('adventist_voice_lang', newLang);
+                  // Broadcast to projector as well
+                  fetch('/api/projector/sync', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ appLanguage: newLang })
+                  }).catch(() => {});
+                }}
+                className="bg-transparent text-xs font-bold text-slate-100 border-none outline-none focus:ring-0 p-0 pr-6 cursor-pointer"
+              >
+                <option value="pt" className="bg-slate-950 text-slate-100">PT 🇧🇷</option>
+                <option value="en" className="bg-slate-950 text-slate-100">EN 🇺🇸</option>
+                <option value="es" className="bg-slate-950 text-slate-100">ES 🇪🇸</option>
+              </select>
             </div>
+
+
 
             {/* Editable Profile Name Badge / Singer Selector */}
             <div className="glass-panel px-3 py-1.5 rounded-xl flex items-center gap-2 shadow-md">
@@ -328,7 +389,7 @@ export default function App() {
                     maxLength={15}
                     value={editedName}
                     onChange={(e) => setEditedName(e.target.value)}
-                    placeholder="Nome..."
+                    placeholder={appLanguage === 'pt' ? 'Nome...' : appLanguage === 'en' ? 'Name...' : 'Nombre...'}
                     className="bg-slate-950 text-xs text-white rounded px-2 py-1 border border-white/10 w-24 sm:w-28 focus:outline-none"
                   />
                   <button
@@ -347,7 +408,7 @@ export default function App() {
               ) : (
                 <div className="flex items-center gap-2">
                   <div className="flex flex-col">
-                    <span className="text-[8px] text-amber-500 uppercase tracking-wider font-extrabold leading-none mb-0.5">Cantor Ativo</span>
+                    <span className="text-[8px] text-amber-500 uppercase tracking-wider font-extrabold leading-none mb-0.5">{t.activeSinger}</span>
                     <select
                       value={userName}
                       onChange={(e) => {
@@ -377,7 +438,7 @@ export default function App() {
                       setIsEditingName(true);
                     }}
                     className="text-slate-500 hover:text-amber-400 transition-colors cursor-pointer p-1 rounded hover:bg-white/5"
-                    title="Editar ou digitar nome personalizado"
+                    title={appLanguage === 'pt' ? 'Editar nome' : appLanguage === 'en' ? 'Edit name' : 'Editar nombre'}
                   >
                     <Edit3 className="h-3 w-3" />
                   </button>
@@ -390,36 +451,36 @@ export default function App() {
               <div className="flex glass-panel p-1 rounded-xl shadow-lg">
                 <button
                   onClick={() => setView('home')}
-                  className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
+                  className={`px-3 sm:px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
                     view === 'home'
                       ? 'bg-amber-500 text-slate-950 font-extrabold shadow-md shadow-amber-500/20'
                       : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
                   }`}
                 >
                   <Music className="h-3.5 w-3.5" />
-                  Músicas
+                  {t.songs}
                 </button>
                 <button
                   onClick={() => setView('leaderboard')}
-                  className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
+                  className={`px-3 sm:px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
                     view === 'leaderboard'
                       ? 'bg-amber-500 text-slate-950 font-extrabold shadow-md shadow-amber-500/20'
                       : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
                   }`}
                 >
                   <Trophy className="h-3.5 w-3.5" />
-                  Placar
+                  {t.scoreboard}
                 </button>
                 <button
                   onClick={() => setView('admin')}
-                  className={`px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
+                  className={`px-3 sm:px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
                     view === 'admin'
                       ? 'bg-amber-500 text-slate-950 font-extrabold shadow-md shadow-amber-500/20'
                       : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
                   }`}
                 >
                   <Settings2 className="h-3.5 w-3.5" />
-                  Estúdio Admin
+                  {t.adminStudio}
                 </button>
               </div>
             )}
@@ -439,6 +500,7 @@ export default function App() {
               setView('singing');
             }}
             onNavigateToLeaderboard={() => setView('leaderboard')}
+            appLanguage={appLanguage}
           />
         )}
 
@@ -462,6 +524,7 @@ export default function App() {
             onClearHistory={handleClearHistory}
             onClearCompetitors={handleClearCompetitorScores}
             onDeleteCompetitor={handleDeleteCompetitor}
+            appLanguage={appLanguage}
           />
         )}
 
@@ -474,6 +537,7 @@ export default function App() {
               setSelectedSong(song);
               setView('singing');
             }}
+            appLanguage={appLanguage}
           />
         )}
       </main>
@@ -486,15 +550,39 @@ export default function App() {
               ❤️ Adventist Voice • Karaokê Adventista
             </p>
             <p className="text-[11px] text-slate-600 mt-1">
-              Desenvolvido com carinho para inspirar cultos jovens, momentos em família, comunhão e prática musical.
+              {appLanguage === 'pt' 
+                ? 'Desenvolvido com carinho para inspirar cultos jovens, momentos em família, comunhão e prática musical.'
+                : appLanguage === 'en'
+                ? 'Developed with love to inspire youth worship, family times, fellowship and musical practice.'
+                : 'Desarrollado con amor para inspirar el culto juvenil, momentos familiares, comunión y práctica musical.'}
             </p>
           </div>
           <div className="text-xs text-slate-500 flex items-center justify-center md:justify-end gap-1.5 font-semibold">
             <Shield className="h-3.5 w-3.5 text-emerald-400" />
-            Salvo localmente no navegador (localStorage) • Sem coleta de dados.
+            {appLanguage === 'pt'
+              ? 'Salvo localmente no navegador (localStorage) • Sem coleta de dados.'
+              : appLanguage === 'en'
+              ? 'Saved locally in the browser (localStorage) • No data collection.'
+              : 'Guardado localmente en el navegador (localStorage) • Sin recopilación de datos.'}
           </div>
         </div>
       </footer>
+
+      {/* Scroll to top button for mobile / smaller screens */}
+      <AnimatePresence>
+        {showScrollTop && (
+          <motion.button
+            initial={{ opacity: 0, scale: 0.8, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.8, y: 20 }}
+            onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+            className="fixed bottom-6 right-6 z-50 h-10 w-10 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black rounded-full flex items-center justify-center shadow-lg shadow-amber-500/20 active:scale-95 transition-transform cursor-pointer border border-amber-400/30 sm:hidden"
+            title={appLanguage === 'pt' ? 'Voltar ao topo' : appLanguage === 'en' ? 'Back to top' : 'Volver arriba'}
+          >
+            <ChevronUp className="h-5 w-5 stroke-[3px]" />
+          </motion.button>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

@@ -13,6 +13,7 @@ export interface LyricLine {
 
 export type SongCategory = 'Hinário' | 'CD Jovem';
 export type SongDifficulty = 'Fácil' | 'Médio' | 'Difícil';
+export type SongLanguage = 'pt' | 'en' | 'es';
 
 export interface Song {
   id: string;
@@ -26,6 +27,7 @@ export interface Song {
   melody: MelodyNote[];
   description?: string;
   audioFile?: File;
+  language?: SongLanguage;
 }
 
 export interface ScoreRecord {
