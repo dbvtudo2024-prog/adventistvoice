@@ -1,6 +1,16 @@
 {
+<<<<<<< HEAD
   "name": "Adventist Voice",
   "short_name": "Adventist Voice",
+=======
+<<<<<<< HEAD
+  "name": "Adventist Voice",
+  "short_name": "Adventist Voice",
+=======
+  "name": "Maranata Louvor",
+  "short_name": "Maranata Louvor",
+>>>>>>> ee02e83e34ffd48ff2887283a161bccb8888079f
+>>>>>>> 8f0c5633ba8c2493c73daede423d1a38e9bf2adb
   "description": "Karaokê Adventista com análise e pontuação vocal precisa.",
   "start_url": "/",
   "display": "standalone",
