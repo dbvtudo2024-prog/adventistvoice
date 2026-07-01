@@ -1,29 +1,28 @@
-<!doctype html>
-<html lang="pt-BR">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#f59e0b" />
-<<<<<<< HEAD
-    <title>Adventist Voice</title>
-=======
-    <title>Maranata Louvor</title>
->>>>>>> ee02e83e34ffd48ff2887283a161bccb8888079f
-    <link rel="manifest" href="/manifest.json" />
-    <link rel="apple-touch-icon" href="/app_icon.jpg" />
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-    <script>
-      if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js')
-            .then(reg => console.log('Service Worker registrado com sucesso:', reg.scope))
-            .catch(err => console.error('Erro ao registrar Service Worker:', err));
-        });
-      }
-    </script>
-  </body>
-</html>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
 
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Space Grotesk", sans-serif;
+}
+
+/* Custom auxiliary classes for Immersive UI theme */
+.atmosphere {
+  background: 
+    radial-gradient(circle at 80% 20%, rgba(56, 189, 248, 0.15) 0%, transparent 50%),
+    radial-gradient(circle at 20% 80%, rgba(245, 158, 11, 0.1) 0%, transparent 50%);
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.glass-panel {
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.serif-font {
+  font-family: 'Georgia', Garamond, serif;
+}
