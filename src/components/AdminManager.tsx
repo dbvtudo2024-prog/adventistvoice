@@ -10,7 +10,7 @@ import {
 
 interface AdminManagerProps {
   customSongs: Song[];
-  onSaveCustomSongs: (songs: Song[]) => void;
+  onSaveCustomSongs: (songs: Song[]) => Promise<{ success: boolean; database?: string; warning?: string }> | any;
   onExit: () => void;
   onSelectAndPlay: (song: Song) => void;
   appLanguage: AppLanguage;
@@ -69,6 +69,7 @@ export default function AdminManager({
 
   // Handle Drag & Drop of Audio Files
   const [isDragging, setIsDragging] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   // Projection / singing stage settings
   const [scoreMode, setScoreMode] = useState(() => {
@@ -408,7 +409,7 @@ export default function AdminManager({
   };
 
   // Compile and Save Custom Song to database
-  const handleSaveCompiledSong = () => {
+  const handleSaveCompiledSong = async () => {
     // Basic verification of timings
     const timingIssues = syncedLines.some(line => line.time === 0 && line.endTime === 0);
     if (timingIssues) {
@@ -418,50 +419,70 @@ export default function AdminManager({
       if (!confirmSave) return;
     }
 
-    const generatedMelody = buildMidiMelodyFromLyrics(syncedLines);
-    let nextCustomSongs: Song[];
-    const isEditMode = !!editingSongId;
-    const finalSongId = editingSongId || `custom-${Date.now()}`;
+    setIsSaving(true);
 
-    const updatedSong: Song = {
-      id: finalSongId,
-      title: title.trim(),
-      category: category,
-      numberOrYear: numberOrYear.trim() || (category === 'Hinário' ? 'Hino Avulso' : 'CD Jovem'),
-      artist: artist.trim(),
-      bpm: bpm,
-      difficulty: difficulty,
-      description: description.trim() || 'Música personalizada cadastrada através da área de criação.',
-      lyrics: syncedLines,
-      melody: generatedMelody,
-      audioFile: audioFile || undefined,
-      language: language
-    };
+    try {
+      const generatedMelody = buildMidiMelodyFromLyrics(syncedLines);
+      let nextCustomSongs: Song[];
+      const isEditMode = !!editingSongId;
+      const finalSongId = editingSongId || `custom-${Date.now()}`;
 
-    if (isEditMode) {
-      nextCustomSongs = customSongs.map(s => s.id === finalSongId ? updatedSong : s);
-    } else {
-      nextCustomSongs = [updatedSong, ...customSongs];
+      const updatedSong: Song = {
+        id: finalSongId,
+        title: title.trim(),
+        category: category,
+        numberOrYear: numberOrYear.trim() || (category === 'Hinário' ? 'Hino Avulso' : 'CD Jovem'),
+        artist: artist.trim(),
+        bpm: bpm,
+        difficulty: difficulty,
+        description: description.trim() || 'Música personalizada cadastrada através da área de criação.',
+        lyrics: syncedLines,
+        melody: generatedMelody,
+        audioFile: audioFile || undefined,
+        language: language
+      };
+
+      if (isEditMode) {
+        nextCustomSongs = customSongs.map(s => s.id === finalSongId ? updatedSong : s);
+      } else {
+        nextCustomSongs = [updatedSong, ...customSongs];
+      }
+
+      const res = await onSaveCustomSongs(nextCustomSongs);
+
+      // Reset workflow State
+      setEditingSongId(null);
+      setTitle('');
+      setArtist('');
+      setNumberOrYear('');
+      setDescription('');
+      setLanguage('pt');
+      setRawLyricsText('');
+      setAudioFile(null);
+      if (audioUrl) URL.revokeObjectURL(audioUrl);
+      setAudioUrl(null);
+      stopVirtualTimer();
+      setSongTime(0);
+
+      if (res && res.success) {
+        if (res.database === 'supabase') {
+          alert(`Sucesso! "${updatedSong.title}" foi salva com sucesso no Banco de Dados Supabase (Nuvem)!`);
+        } else {
+          alert(`Sucesso! "${updatedSong.title}" foi salva localmente no navegador.`);
+        }
+      } else if (res && res.warning) {
+        alert(`Música salva localmente! Atenção: não foi possível salvar no banco online (${res.warning}). Verifique suas credenciais.`);
+      } else {
+        alert(`Música "${updatedSong.title}" foi salva localmente.`);
+      }
+      setAdminView('list');
+    } catch (err: any) {
+      console.error(err);
+      alert(`Música salva localmente! Houve um erro ao sincronizar com o banco: ${err.message || err}`);
+      setAdminView('list');
+    } finally {
+      setIsSaving(false);
     }
-
-    onSaveCustomSongs(nextCustomSongs);
-
-    // Reset workflow State
-    setEditingSongId(null);
-    setTitle('');
-    setArtist('');
-    setNumberOrYear('');
-    setDescription('');
-    setLanguage('pt');
-    setRawLyricsText('');
-    setAudioFile(null);
-    if (audioUrl) URL.revokeObjectURL(audioUrl);
-    setAudioUrl(null);
-    stopVirtualTimer();
-    setSongTime(0);
-
-    alert(`Sucesso! "${updatedSong.title}" foi ${isEditMode ? 'atualizada' : 'compilada'} e salva localmente no navegador.`);
-    setAdminView('list');
   };
 
   // Remove a Custom song
@@ -689,14 +710,6 @@ export default function AdminManager({
             </button>
           </div>
         </div>
-        
-        <button
-          onClick={onExit}
-          className="inline-flex items-center gap-2 rounded-xl bg-slate-900 border border-white/5 hover:border-white/15 px-4 py-2 text-xs font-bold text-slate-300 hover:text-white transition-all cursor-pointer shadow-md select-none"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          {appLanguage === 'pt' ? 'Voltar às Músicas' : appLanguage === 'en' ? 'Back to Songs' : 'Volver a las Canciones'}
-        </button>
       </div>
 
       {/* VIEW A: LIST SONGS DASHBOARD */}
@@ -1547,10 +1560,24 @@ export default function AdminManager({
                   <button
                     type="button"
                     onClick={handleSaveCompiledSong}
-                    className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-amber-500 hover:bg-amber-400 py-3 text-xs font-black text-slate-950 font-display transition-all cursor-pointer shadow-lg shadow-amber-500/10 hover:shadow-amber-500/25 active:scale-[0.99] select-none"
+                    disabled={isSaving}
+                    className={`w-full inline-flex items-center justify-center gap-2 rounded-xl py-3 text-xs font-black font-display transition-all shadow-lg select-none ${
+                      isSaving 
+                        ? 'bg-amber-500/40 text-slate-950/40 cursor-not-allowed' 
+                        : 'bg-amber-500 hover:bg-amber-400 text-slate-950 hover:shadow-amber-500/25 active:scale-[0.99] cursor-pointer shadow-amber-500/10'
+                    }`}
                   >
-                    <Save className="h-4 w-4" />
-                    Salvar Música e Sincronizar
+                    {isSaving ? (
+                      <>
+                        <RefreshCw className="h-4 w-4 animate-spin" />
+                        Salvando e Sincronizando...
+                      </>
+                    ) : (
+                      <>
+                        <Save className="h-4 w-4" />
+                        Salvar Música e Sincronizar
+                      </>
+                    )}
                   </button>
                 </div>
 

@@ -6,7 +6,7 @@ import Leaderboard from './components/Leaderboard';
 import KaraokeStage from './components/KaraokeStage';
 import AdminManager from './components/AdminManager';
 import ProjectorView from './components/ProjectorView';
-import { Mic, Trophy, Music, User, Flame, Disc, Shield, Settings2, Edit3, Check, ChevronUp, Camera, Upload } from 'lucide-react';
+import { Mic, Trophy, Music, User, Flame, Disc, Shield, Settings2, Edit3, Check, ChevronUp, ChevronDown, Camera, Upload } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { AppLanguage, translations } from './utils/translations';
 
@@ -73,6 +73,7 @@ export default function App() {
   const [isEditingName, setIsEditingName] = useState(false);
   const [editedName, setEditedName] = useState('Você (Cantor)');
   const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [isSingerDropdownOpen, setIsSingerDropdownOpen] = useState(false);
 
   // Dynamic highscore map per song ID
   const [highscores, setHighscores] = useState<{ [songId: string]: { score: number; accuracy: number; stars: number } }>({});
@@ -244,7 +245,7 @@ export default function App() {
   };
 
   // Salva músicas customizadas no LocalStorage, no Servidor e sincroniza os áudios binários no IndexedDB
-  const handleSaveCustomSongs = (newSongs: Song[]) => {
+  const handleSaveCustomSongs = (newSongs: Song[]): Promise<{ success: boolean; database?: string; warning?: string }> => {
     // 1. Identifica músicas removidas para deletar seus arquivos de áudio do IndexedDB
     const newSongIds = new Set(newSongs.map(s => s.id));
     const deletedSongs = customSongs.filter(s => !newSongIds.has(s.id));
@@ -273,7 +274,7 @@ export default function App() {
       localStorage.setItem('adventist_karaoke_custom_songs', JSON.stringify(songsToSerialize));
 
       // Sincroniza com o servidor para que todos tenham acesso!
-      fetch('/api/custom-songs', {
+      return fetch('/api/custom-songs', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -281,11 +282,17 @@ export default function App() {
         body: JSON.stringify(songsToSerialize)
       })
       .then(res => res.json())
-      .then(() => {
-        console.log('Músicas sincronizadas com o servidor com sucesso');
+      .then((data) => {
+        console.log('Músicas sincronizadas com o servidor com sucesso', data);
+        return data;
       })
-      .catch(err => console.error('Erro ao salvar no servidor:', err));
-    } catch(e){}
+      .catch(err => {
+        console.error('Erro ao salvar no servidor:', err);
+        return { success: false, warning: String(err.message || err) };
+      });
+    } catch(e) {
+      return Promise.resolve({ success: false, warning: String(e) });
+    }
   };
 
   // Changing name logic
@@ -518,7 +525,7 @@ export default function App() {
 
 
             {/* Editable Profile Name Badge / Singer Selector */}
-            <div className="glass-panel px-3 py-1.5 rounded-xl flex items-center gap-2.5 shadow-md border border-white/5">
+            <div className="glass-panel px-3 py-1.5 rounded-xl flex items-center gap-2.5 shadow-md border border-white/5 relative">
               {/* Active Singer's Avatar */}
               <div className="h-7 w-7 rounded-full bg-slate-800 border border-white/10 flex items-center justify-center text-sm shrink-0 overflow-hidden shadow-inner">
                 {(() => {
@@ -532,34 +539,107 @@ export default function App() {
               </div>
               
               {/* Selector dropdown */}
-              <div className="flex flex-col text-left">
+              <div className="flex flex-col text-left relative">
                 <span className="text-[8px] text-amber-500 uppercase tracking-wider font-extrabold leading-none mb-0.5">
                   {t.activeSinger}
                 </span>
-                <select
-                  value={userName}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    setUserName(val);
-                    setEditedName(val);
-                    try {
-                      localStorage.setItem('adventist_karaoke_active_singer', val);
-                    } catch(err){}
-                  }}
-                  className="bg-transparent text-xs font-bold text-slate-100 border-none outline-none focus:ring-0 p-0 pr-6 cursor-pointer min-w-[90px] max-w-[130px] truncate"
+                
+                <button
+                  type="button"
+                  onClick={() => setIsSingerDropdownOpen(!isSingerDropdownOpen)}
+                  className="flex items-center gap-1.5 text-xs font-bold text-slate-100 hover:text-amber-400 bg-transparent transition-colors cursor-pointer select-none outline-none min-w-[90px] max-w-[130px] justify-between text-left"
                 >
-                  {/* Primary Profile Option */}
-                  <option value={profileName} className="bg-slate-950 text-slate-100">
-                    {profileName} (Você)
-                  </option>
-                  
-                  {/* Competitor friends options */}
-                  {competitors.filter(c => c.name !== profileName).map((c) => (
-                    <option key={c.name} value={c.name} className="bg-slate-950 text-slate-100">
-                      {c.avatar && (c.avatar.startsWith('data:') || c.avatar.startsWith('http')) ? '👤' : c.avatar} {c.name}
-                    </option>
-                  ))}
-                </select>
+                  <span className="truncate pr-1">{userName === profileName ? `${userName} (${appLanguage === 'pt' ? 'Você' : appLanguage === 'en' ? 'You' : 'Tú'})` : userName}</span>
+                  <ChevronDown className="h-3 w-3 text-slate-400 shrink-0" />
+                </button>
+
+                <AnimatePresence>
+                  {isSingerDropdownOpen && (
+                    <>
+                      {/* Transparent click-outside overlay */}
+                      <div 
+                        className="fixed inset-0 z-40 cursor-default" 
+                        onClick={() => setIsSingerDropdownOpen(false)} 
+                      />
+                      
+                      {/* Beautiful custom dropdown list */}
+                      <motion.div
+                        initial={{ opacity: 0, y: 8, scale: 0.95 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: 8, scale: 0.95 }}
+                        transition={{ duration: 0.12 }}
+                        className="absolute left-0 mt-6 top-full min-w-[170px] bg-slate-900 border border-white/10 rounded-xl shadow-2xl p-1 z-50 overflow-hidden backdrop-blur-xl max-h-60 overflow-y-auto scrollbar-none text-left"
+                      >
+                        {/* Option: Primary Singer */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setUserName(profileName);
+                            setEditedName(profileName);
+                            try {
+                              localStorage.setItem('adventist_karaoke_active_singer', profileName);
+                            } catch(err){}
+                            setIsSingerDropdownOpen(false);
+                          }}
+                          className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center justify-between hover:bg-white/5 cursor-pointer ${
+                            userName === profileName ? 'bg-amber-500/10 text-amber-400 font-black' : 'text-slate-300 hover:text-white'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <div className="h-4.5 w-4.5 rounded-full bg-slate-800 border border-white/10 flex items-center justify-center text-[10px] shrink-0 overflow-hidden shadow-inner">
+                              {userAvatar.startsWith('data:') || userAvatar.startsWith('http') ? (
+                                <img src={userAvatar} alt="Foto" className="h-full w-full object-cover" />
+                              ) : (
+                                <span className="text-[10px]">{userAvatar || '🎤'}</span>
+                              )}
+                            </div>
+                            <span className="truncate">{profileName} <span className="opacity-60 text-[9px]">({appLanguage === 'pt' ? 'Você' : appLanguage === 'en' ? 'You' : 'Tú'})</span></span>
+                          </div>
+                          {userName === profileName && <Check className="h-3.5 w-3.5 shrink-0 text-amber-500" />}
+                        </button>
+
+                        {/* Separator if there are other friends */}
+                        {competitors.filter(c => c.name !== profileName).length > 0 && (
+                          <div className="border-t border-white/5 my-1" />
+                        )}
+
+                        {/* Options: Friend Competitors */}
+                        {competitors.filter(c => c.name !== profileName).map((c) => {
+                          const isSelected = userName === c.name;
+                          return (
+                            <button
+                              key={c.name}
+                              type="button"
+                              onClick={() => {
+                                setUserName(c.name);
+                                setEditedName(c.name);
+                                try {
+                                  localStorage.setItem('adventist_karaoke_active_singer', c.name);
+                                } catch(err){}
+                                setIsSingerDropdownOpen(false);
+                              }}
+                              className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center justify-between hover:bg-white/5 cursor-pointer ${
+                                isSelected ? 'bg-amber-500/10 text-amber-400 font-black' : 'text-slate-300 hover:text-white'
+                              }`}
+                            >
+                              <div className="flex items-center gap-2 min-w-0">
+                                <div className="h-4.5 w-4.5 rounded-full bg-slate-800 border border-white/10 flex items-center justify-center text-[10px] shrink-0 overflow-hidden shadow-inner">
+                                  {c.avatar && (c.avatar.startsWith('data:') || c.avatar.startsWith('http')) ? (
+                                    <img src={c.avatar} alt="Foto" className="h-full w-full object-cover" />
+                                  ) : (
+                                    <span className="text-[10px]">{c.avatar || '🎤'}</span>
+                                  )}
+                                </div>
+                                <span className="truncate">{c.name}</span>
+                              </div>
+                              {isSelected && <Check className="h-3.5 w-3.5 shrink-0 text-amber-500" />}
+                            </button>
+                          );
+                        })}
+                      </motion.div>
+                    </>
+                  )}
+                </AnimatePresence>
               </div>
 
               {/* Edit Primary Profile Button */}
