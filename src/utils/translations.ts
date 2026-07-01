@@ -4,7 +4,7 @@ export const translations = {
   pt: {
     songs: "Músicas",
     scoreboard: "Placar",
-    adminStudio: "Estúdio Admin",
+    adminStudio: "Configuração",
     activeSinger: "Cantor Ativo",
     awaitingSinger: "Aguardando cantor",
     connectedRealTime: "Conectado em Tempo Real",
@@ -73,7 +73,7 @@ export const translations = {
   en: {
     songs: "Songs",
     scoreboard: "Scoreboard",
-    adminStudio: "Admin Studio",
+    adminStudio: "Settings",
     activeSinger: "Active Singer",
     awaitingSinger: "Awaiting singer",
     connectedRealTime: "Connected in Real Time",
@@ -142,7 +142,7 @@ export const translations = {
   es: {
     songs: "Canciones",
     scoreboard: "Tabla de posiciones",
-    adminStudio: "Estudio Admin",
+    adminStudio: "Configuración",
     activeSinger: "Cantor Activo",
     awaitingSinger: "Esperando cantante",
     connectedRealTime: "Conectado en Tiempo Real",

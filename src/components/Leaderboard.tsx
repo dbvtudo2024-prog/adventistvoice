@@ -451,8 +451,12 @@ export default function Leaderboard({
                           </td>
                           <td className="py-3 px-3 sm:px-4">
                             <div className="flex items-center gap-2.5 sm:gap-3">
-                              <span className="text-xl sm:text-2xl bg-slate-950/60 h-7 w-7 sm:h-8 sm:w-8 rounded-full flex items-center justify-center border border-white/5 shadow-inner">
-                                {comp.avatar}
+                              <span className="text-xl sm:text-2xl bg-slate-950/60 h-7 w-7 sm:h-8 sm:w-8 rounded-full flex items-center justify-center border border-white/5 shadow-inner overflow-hidden">
+                                {comp.avatar && (comp.avatar.startsWith('data:') || comp.avatar.startsWith('http')) ? (
+                                  <img src={comp.avatar} alt={comp.name} className="h-full w-full object-cover" referrerPolicy="no-referrer" />
+                                ) : (
+                                  comp.avatar
+                                )}
                               </span>
                               <div>
                                 <p className="text-xs sm:text-sm font-bold text-white flex items-center gap-1.5">

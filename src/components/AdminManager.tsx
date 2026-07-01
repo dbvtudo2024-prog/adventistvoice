@@ -14,6 +14,8 @@ interface AdminManagerProps {
   onExit: () => void;
   onSelectAndPlay: (song: Song) => void;
   appLanguage: AppLanguage;
+  loginEmail: string | null;
+  onLogin: (email: string | null) => void;
 }
 
 export default function AdminManager({ 
@@ -21,9 +23,16 @@ export default function AdminManager({
   onSaveCustomSongs, 
   onExit, 
   onSelectAndPlay,
-  appLanguage
+  appLanguage,
+  loginEmail,
+  onLogin
 }: AdminManagerProps) {
   const t = translations[appLanguage];
+
+  // Login Form States
+  const [emailInput, setEmailInput] = useState('');
+  const [passwordInput, setPasswordInput] = useState('');
+  const [loginError, setLoginError] = useState('');
   
   // Navigation View Mode
   const [adminView, setAdminView] = useState<'list' | 'add' | 'sync'>('list');
@@ -527,33 +536,158 @@ export default function AdminManager({
     setAdminView('add');
   };
 
+  // Enforce non-admin security constraints
+  if (loginEmail !== 'ronaldosonic@gmail.com' && adminView !== 'list') {
+    setAdminView('list');
+  }
+
+  // Handle Login submission
+  const handleSubmitLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmedEmail = emailInput.trim().toLowerCase();
+    if (!trimmedEmail) {
+      setLoginError(appLanguage === 'pt' ? 'O e-mail é obrigatório.' : 'Email is required.');
+      return;
+    }
+    if (!trimmedEmail.includes('@') || !trimmedEmail.includes('.')) {
+      setLoginError(appLanguage === 'pt' ? 'Por favor, insira um e-mail válido.' : 'Please enter a valid email.');
+      return;
+    }
+    setLoginError('');
+    onLogin(trimmedEmail);
+  };
+
+  if (!loginEmail) {
+    return (
+      <div className="w-full max-w-md mx-auto py-12 px-4 text-left">
+        <div 
+          className="glass-panel p-8 rounded-2xl border border-white/10 shadow-[0_0_50px_rgba(0,0,0,0.5)] bg-slate-950/60 backdrop-blur-xl relative"
+        >
+          {/* Decorative ambient glow */}
+          <div className="absolute -top-12 -left-12 w-24 h-24 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
+          <div className="absolute -bottom-12 -right-12 w-24 h-24 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
+
+          <div className="flex flex-col items-center text-center mb-6">
+            <div className="h-12 w-12 bg-amber-500 rounded-full flex items-center justify-center shadow-[0_0_20px_rgba(245,158,11,0.3)] mb-4">
+              <ShieldCheck className="h-6 w-6 text-slate-950" />
+            </div>
+            <h2 className="font-display text-xl font-bold tracking-tight text-white">
+              {appLanguage === 'pt' ? 'Acessar Configurações' : appLanguage === 'en' ? 'Access Settings' : 'Acceder a Configuración'}
+            </h2>
+            <p className="text-xs text-slate-400 mt-1.5 max-w-xs leading-relaxed">
+              {appLanguage === 'pt' 
+                ? 'Entre com seu e-mail para configurar a tela e gerenciar os louvores do Karaokê.' 
+                : appLanguage === 'en' 
+                ? 'Enter your email to configure the screen and manage Karaoke praises.' 
+                : 'Ingrese su correo para configurar la pantalla y administrar las alabanzas de Karaoke.'}
+            </p>
+          </div>
+
+          <form onSubmit={handleSubmitLogin} className="space-y-4">
+            <div className="space-y-1.5 text-left">
+              <label className="block text-[11px] font-bold text-slate-300 uppercase tracking-wider">
+                {appLanguage === 'pt' ? 'E-mail' : appLanguage === 'en' ? 'Email' : 'Correo electrónico'}
+              </label>
+              <input
+                type="email"
+                required
+                value={emailInput}
+                onChange={(e) => setEmailInput(e.target.value)}
+                placeholder="exemplo@gmail.com"
+                className="w-full bg-slate-950/80 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500/50 transition-colors"
+              />
+            </div>
+
+            <div className="space-y-1.5 text-left">
+              <label className="block text-[11px] font-bold text-slate-300 uppercase tracking-wider">
+                {appLanguage === 'pt' ? 'Senha (opcional)' : appLanguage === 'en' ? 'Password (optional)' : 'Contraseña (opcional)'}
+              </label>
+              <input
+                type="password"
+                value={passwordInput}
+                onChange={(e) => setPasswordInput(e.target.value)}
+                placeholder="••••••••"
+                className="w-full bg-slate-950/80 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500/50 transition-colors"
+              />
+            </div>
+
+            {loginError && (
+              <p className="text-xs font-semibold text-red-400 bg-red-500/10 border border-red-500/20 p-2.5 rounded-lg text-left">
+                ⚠️ {loginError}
+              </p>
+            )}
+
+            <button
+              type="submit"
+              className="w-full rounded-xl bg-amber-500 hover:bg-amber-400 py-3 text-xs font-black text-slate-950 shadow-md hover:shadow-lg transition-all cursor-pointer mt-2"
+            >
+              {appLanguage === 'pt' ? 'Entrar' : appLanguage === 'en' ? 'Sign In' : 'Entrar'}
+            </button>
+          </form>
+
+          <div className="mt-6 pt-5 border-t border-white/5 text-center">
+            <p className="text-[10px] text-slate-500 leading-normal">
+              {appLanguage === 'pt'
+                ? 'Nota: Use qualquer e-mail para acessar. Apenas o e-mail do administrador oficial (ronaldosonic@gmail.com) terá acesso para adicionar e editar músicas.'
+                : appLanguage === 'en'
+                ? 'Note: Use any email to access. Only the official administrator email (ronaldosonic@gmail.com) will have access to add and edit songs.'
+                : 'Nota: Use cualquier correo para acceder. Solo el correo del administrador oficial (ronaldosonic@gmail.com) tendrá acceso para agregar y editar canciones.'}
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="w-full text-slate-100 font-sans">
       
       {/* Header Dashboard Banner */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-white/5 pb-6 mb-8">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-white/5 pb-6 mb-8 text-left">
         <div>
           <div className="flex items-center gap-2 mb-1">
             <span className="px-2 py-0.5 bg-amber-500/10 border border-amber-500/30 text-amber-500 text-[10px] font-black rounded-md uppercase tracking-widest leading-none">
-              {appLanguage === 'pt' ? 'Módulo Admin' : appLanguage === 'en' ? 'Admin Module' : 'Módulo Admin'}
+              {appLanguage === 'pt' ? 'Módulo Configuração' : appLanguage === 'en' ? 'Settings Module' : 'Módulo Configuración'}
             </span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-black font-display tracking-tight text-white m-0">
             {appLanguage === 'pt' ? (
-              <>Painel de <span className="text-amber-500">Criação & Sincronia</span></>
+              <>Painel de <span className="text-amber-500">Configurações & Louvores</span></>
             ) : appLanguage === 'en' ? (
-              <>Creation & <span className="text-amber-500">Sync Panel</span></>
+              <>Settings & <span className="text-amber-500">Praise Panel</span></>
             ) : (
-              <>Panel de <span className="text-amber-500">Creación y Sincronía</span></>
+              <>Panel de <span className="text-amber-500">Configuraciones y Alabanzas</span></>
             )}
           </h1>
           <p className="text-xs text-slate-400 font-medium leading-relaxed mt-1">
             {appLanguage === 'pt' 
-              ? 'Adicione suas próprias músicas prediletas e crie marcações de tempo precisas para cantar no karaokê com feed de voz em tempo real.'
+              ? 'Ajuste as preferências de tela ou configure novos louvores para cantar em família ou na igreja.'
               : appLanguage === 'en'
-              ? 'Add your own favorite songs and create precise timestamps to sing in karaoke with real-time voice feedback.'
-              : 'Agrega tus propias canciones favoritas y crea marcas de tiempo precisas para cantar en karaoke con retroalimentación de voz en tiempo real.'}
+              ? 'Adjust screen preferences or configure new praises to sing at family or church.'
+              : 'Ajusta las preferencias de pantalla o configura nuevas alabanzas para cantar em família ou na igreja.'}
           </p>
+          
+          <div className="flex flex-wrap items-center gap-2 mt-3">
+            <span className="text-[10px] bg-white/5 border border-white/10 px-2 py-1 rounded-lg text-slate-300 font-semibold font-mono">
+              👤 {loginEmail}
+            </span>
+            <span className={`text-[10px] px-2 py-1 rounded-lg font-bold border ${
+              loginEmail === 'ronaldosonic@gmail.com' 
+                ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' 
+                : 'bg-indigo-500/10 border-indigo-500/20 text-indigo-400'
+            }`}>
+              {loginEmail === 'ronaldosonic@gmail.com' 
+                ? (appLanguage === 'pt' ? 'Administrador' : 'Administrator')
+                : (appLanguage === 'pt' ? 'Membro' : 'Member')
+              }
+            </span>
+            <button
+              onClick={() => onLogin(null)}
+              className="text-[10px] text-red-400 hover:text-red-300 transition-colors font-bold ml-1 hover:underline cursor-pointer"
+            >
+              [{appLanguage === 'pt' ? 'Sair' : 'Logout'}]
+            </button>
+          </div>
         </div>
         
         <button

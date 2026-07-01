@@ -9,10 +9,4 @@ export const ADVENTIST_SONGS: Song[] = [];
 
 export const DEFAULT_LEADERBOARD: ScoreRecord[] = [];
 
-export const SYSTEM_COMPETITORS: FriendCompetitor[] = [
-  { name: 'Gabriela Mendonça', avatar: '🌸', hymnalHighscore: 9150, youthHighscore: 8400, joinedDate: 'Janeiro 2026' },
-  { name: 'Mateus Silva', avatar: '⚡', hymnalHighscore: 8500, youthHighscore: 8780, joinedDate: 'Fevereiro 2026' },
-  { name: 'Ana Júlia', avatar: '🎵', hymnalHighscore: 8200, youthHighscore: 8520, joinedDate: 'Março 2026' },
-  { name: 'Lucas Reis', avatar: '🎸', hymnalHighscore: 7900, youthHighscore: 7500, joinedDate: 'Abril 2026' },
-  { name: 'Fernanda Rocha', avatar: '✨', hymnalHighscore: 9410, youthHighscore: 8900, joinedDate: 'Maio 2026' }
-];
+export const SYSTEM_COMPETITORS: FriendCompetitor[] = [];

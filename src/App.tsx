@@ -6,7 +6,7 @@ import Leaderboard from './components/Leaderboard';
 import KaraokeStage from './components/KaraokeStage';
 import AdminManager from './components/AdminManager';
 import ProjectorView from './components/ProjectorView';
-import { Mic, Trophy, Music, User, Flame, Disc, Shield, Settings2, Edit3, Check, ChevronUp } from 'lucide-react';
+import { Mic, Trophy, Music, User, Flame, Disc, Shield, Settings2, Edit3, Check, ChevronUp, Camera, Upload } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { AppLanguage, translations } from './utils/translations';
 
@@ -45,12 +45,34 @@ export default function App() {
   }, []);
   
   // Local Data State
+  const [loginEmail, setLoginEmail] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem('adventist_karaoke_email');
+    } catch (e) {
+      return null;
+    }
+  });
+
+  const handleLogin = (email: string | null) => {
+    setLoginEmail(email);
+    try {
+      if (email) {
+        localStorage.setItem('adventist_karaoke_email', email);
+      } else {
+        localStorage.removeItem('adventist_karaoke_email');
+      }
+    } catch (e) {}
+  };
+
   const [scoreHistory, setScoreHistory] = useState<ScoreRecord[]>([]);
   const [competitors, setCompetitors] = useState<FriendCompetitor[]>([]);
   const [customSongs, setCustomSongs] = useState<Song[]>([]);
   const [userName, setUserName] = useState('Você (Cantor)');
+  const [profileName, setProfileName] = useState('Você (Cantor)');
+  const [userAvatar, setUserAvatar] = useState('🎤');
   const [isEditingName, setIsEditingName] = useState(false);
   const [editedName, setEditedName] = useState('Você (Cantor)');
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
 
   // Dynamic highscore map per song ID
   const [highscores, setHighscores] = useState<{ [songId: string]: { score: number; accuracy: number; stars: number } }>({});
@@ -76,36 +98,94 @@ export default function App() {
 
       const savedCompetitors = localStorage.getItem('adventist_karaoke_competitors');
       if (savedCompetitors) {
-        setCompetitors(JSON.parse(savedCompetitors));
+        try {
+          const parsed = JSON.parse(savedCompetitors);
+          // Filtra mantendo apenas competidores que foram criados manualmente pelo usuário (isCustom === true)
+          const filtered = Array.isArray(parsed) ? parsed.filter((c: any) => c.isCustom === true) : [];
+          setCompetitors(filtered);
+          localStorage.setItem('adventist_karaoke_competitors', JSON.stringify(filtered));
+        } catch (e) {
+          setCompetitors([]);
+          localStorage.setItem('adventist_karaoke_competitors', JSON.stringify([]));
+        }
       } else {
-        setCompetitors(SYSTEM_COMPETITORS);
-        localStorage.setItem('adventist_karaoke_competitors', JSON.stringify(SYSTEM_COMPETITORS));
+        setCompetitors([]);
+        localStorage.setItem('adventist_karaoke_competitors', JSON.stringify([]));
       }
 
-      const savedCustomSongs = localStorage.getItem('adventist_karaoke_custom_songs');
-      if (savedCustomSongs) {
-        const parsedSongs: Song[] = JSON.parse(savedCustomSongs);
-        setCustomSongs(parsedSongs);
-        
-        // Carrega arquivos de áudio binários do IndexedDB de forma assíncrona
-        import('./utils/audioStorage').then(async ({ getSongAudio }) => {
-          const songsWithAudio = await Promise.all(
-            parsedSongs.map(async (song) => {
-              const audioFile = await getSongAudio(song.id);
-              if (audioFile) {
-                return { ...song, audioFile };
-              }
-              return song;
-            })
-          );
-          setCustomSongs(songsWithAudio);
-        }).catch(err => console.error("Falha ao carregar áudios do IndexedDB:", err));
-      }
+      // Carrega músicas compartilhadas do servidor Express
+      fetch('/api/custom-songs')
+        .then(res => res.json())
+        .then(async (serverSongs: Song[]) => {
+          if (Array.isArray(serverSongs)) {
+            let finalSongs = [...serverSongs];
+            
+            // Mescla com as músicas do localStorage se houver alguma que ainda não está no servidor
+            const savedCustomSongs = localStorage.getItem('adventist_karaoke_custom_songs');
+            if (savedCustomSongs) {
+              try {
+                const localSongs: Song[] = JSON.parse(savedCustomSongs);
+                localSongs.forEach(ls => {
+                  if (!finalSongs.some(fs => fs.id === ls.id)) {
+                    finalSongs.push(ls);
+                  }
+                });
+              } catch (e) {}
+            }
+            
+            setCustomSongs(finalSongs);
+            
+            // Carrega arquivos de áudio binários do IndexedDB de forma assíncrona
+            import('./utils/audioStorage').then(async ({ getSongAudio }) => {
+              const songsWithAudio = await Promise.all(
+                finalSongs.map(async (song) => {
+                  const audioFile = await getSongAudio(song.id);
+                  if (audioFile) {
+                    return { ...song, audioFile };
+                  }
+                  return song;
+                })
+              );
+              setCustomSongs(songsWithAudio);
+            }).catch(err => console.error("Falha ao carregar áudios do IndexedDB:", err));
+          }
+        })
+        .catch(err => {
+          console.error("Falha ao carregar músicas do servidor, usando localStorage:", err);
+          const savedCustomSongs = localStorage.getItem('adventist_karaoke_custom_songs');
+          if (savedCustomSongs) {
+            try {
+              const parsedSongs: Song[] = JSON.parse(savedCustomSongs);
+              setCustomSongs(parsedSongs);
+              
+              import('./utils/audioStorage').then(async ({ getSongAudio }) => {
+                const songsWithAudio = await Promise.all(
+                  parsedSongs.map(async (song) => {
+                    const audioFile = await getSongAudio(song.id);
+                    if (audioFile) {
+                      return { ...song, audioFile };
+                    }
+                    return song;
+                  })
+                );
+                setCustomSongs(songsWithAudio);
+              }).catch(err => console.error("Falha ao carregar áudios do IndexedDB:", err));
+            } catch (e) {}
+          }
+        });
 
-      const savedUserName = localStorage.getItem('adventist_karaoke_name');
-      if (savedUserName) {
-        setUserName(savedUserName);
-        setEditedName(savedUserName);
+      const savedProfileName = localStorage.getItem('adventist_karaoke_profile_name') || localStorage.getItem('adventist_karaoke_name');
+      if (savedProfileName) {
+        setProfileName(savedProfileName);
+      }
+      const savedActiveSinger = localStorage.getItem('adventist_karaoke_active_singer') || savedProfileName || 'Você (Cantor)';
+      if (savedActiveSinger) {
+        setUserName(savedActiveSinger);
+        setEditedName(savedActiveSinger);
+      }
+      const savedAvatar = localStorage.getItem('adventist_karaoke_avatar');
+      if (savedAvatar) {
+        setUserAvatar(savedAvatar);
       }
     } catch (e) {
       console.error("Local storage lookup failed safely.", e);
@@ -163,7 +243,7 @@ export default function App() {
     } catch(e){}
   };
 
-  // Salva músicas customizadas no LocalStorage e sincroniza os áudios binários no IndexedDB
+  // Salva músicas customizadas no LocalStorage, no Servidor e sincroniza os áudios binários no IndexedDB
   const handleSaveCustomSongs = (newSongs: Song[]) => {
     // 1. Identifica músicas removidas para deletar seus arquivos de áudio do IndexedDB
     const newSongIds = new Set(newSongs.map(s => s.id));
@@ -191,6 +271,20 @@ export default function App() {
         return rest;
       });
       localStorage.setItem('adventist_karaoke_custom_songs', JSON.stringify(songsToSerialize));
+
+      // Sincroniza com o servidor para que todos tenham acesso!
+      fetch('/api/custom-songs', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(songsToSerialize)
+      })
+      .then(res => res.json())
+      .then(() => {
+        console.log('Músicas sincronizadas com o servidor com sucesso');
+      })
+      .catch(err => console.error('Erro ao salvar no servidor:', err));
     } catch(e){}
   };
 
@@ -213,6 +307,53 @@ export default function App() {
     handleSaveScoreHistory(updatedHistory);
   };
 
+  const handleSaveProfile = (newName: string, newAvatar: string) => {
+    const cleanedName = newName.trim() || 'Você (Cantor)';
+    const oldProfileName = profileName;
+    
+    setProfileName(cleanedName);
+    setUserAvatar(newAvatar);
+    
+    try {
+      localStorage.setItem('adventist_karaoke_profile_name', cleanedName);
+      localStorage.setItem('adventist_karaoke_avatar', newAvatar);
+    } catch (e) {}
+
+    // If currently selected active singer was the old profile name, update it
+    if (userName === oldProfileName || userName === 'Você (Cantor)') {
+      setUserName(cleanedName);
+      try {
+        localStorage.setItem('adventist_karaoke_active_singer', cleanedName);
+      } catch (e) {}
+    }
+
+    // Update active competitor name/avatar inside competitors state
+    const updatedCompetitors = competitors.map(c => {
+      if (c.name === oldProfileName) {
+        return { ...c, name: cleanedName, avatar: newAvatar };
+      }
+      return c;
+    });
+    setCompetitors(updatedCompetitors);
+    try {
+      localStorage.setItem('adventist_karaoke_competitors', JSON.stringify(updatedCompetitors));
+    } catch (e) {}
+
+    // Also update historical references for their username in scoreHistory
+    const updatedHistory = scoreHistory.map((rec) => {
+      if (rec.userName === oldProfileName || rec.userName === 'Você (Cantor)' || rec.userName === 'Cantor Convidado') {
+        return { ...rec, userName: cleanedName };
+      }
+      return rec;
+    });
+    setScoreHistory(updatedHistory);
+    try {
+      localStorage.setItem('adventist_karaoke_history', JSON.stringify(updatedHistory));
+    } catch (e) {}
+
+    setIsEditingProfile(false);
+  };
+
   // Triggered when user successfully finishes a song on KaraokeStage
   const handleSaveNewScore = (newRecord: ScoreRecord) => {
     const updatedHistory = [newRecord, ...scoreHistory];
@@ -229,7 +370,7 @@ export default function App() {
       // Create user's competitor profile
       userComp = {
         name: userName,
-        avatar: '🎤',
+        avatar: userAvatar,
         hymnalHighscore: currentSong.category === 'Hinário' ? newRecord.score : 0,
         youthHighscore: currentSong.category === 'CD Jovem' ? newRecord.score : 0,
         joinedDate: 'Hoje',
@@ -377,74 +518,64 @@ export default function App() {
 
 
             {/* Editable Profile Name Badge / Singer Selector */}
-            <div className="glass-panel px-3 py-1.5 rounded-xl flex items-center gap-2 shadow-md">
-              <div className="h-6 w-6 rounded-full bg-amber-500/10 border border-amber-400/30 flex items-center justify-center text-amber-500 font-bold text-xs shrink-0 shadow-[0_0_10px_rgba(245,158,11,0.2)]">
-                🎤
+            <div className="glass-panel px-3 py-1.5 rounded-xl flex items-center gap-2.5 shadow-md border border-white/5">
+              {/* Active Singer's Avatar */}
+              <div className="h-7 w-7 rounded-full bg-slate-800 border border-white/10 flex items-center justify-center text-sm shrink-0 overflow-hidden shadow-inner">
+                {(() => {
+                  const comp = competitors.find(c => c.name === userName);
+                  const avatarToShow = comp ? comp.avatar : userAvatar;
+                  if (avatarToShow && (avatarToShow.startsWith('data:') || avatarToShow.startsWith('http'))) {
+                    return <img src={avatarToShow} alt="Foto de perfil" className="h-full w-full object-cover" />;
+                  }
+                  return <span className="text-sm">{avatarToShow || '🎤'}</span>;
+                })()}
               </div>
               
-              {isEditingName ? (
-                <div className="flex items-center gap-1.5">
-                  <input
-                    type="text"
-                    maxLength={15}
-                    value={editedName}
-                    onChange={(e) => setEditedName(e.target.value)}
-                    placeholder={appLanguage === 'pt' ? 'Nome...' : appLanguage === 'en' ? 'Name...' : 'Nombre...'}
-                    className="bg-slate-950 text-xs text-white rounded px-2 py-1 border border-white/10 w-24 sm:w-28 focus:outline-none"
-                  />
-                  <button
-                    onClick={handleConfirmNameChange}
-                    className="p-1 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded cursor-pointer transition-colors"
-                  >
-                    <Check className="h-3.5 w-3.5 font-bold" />
-                  </button>
-                  <button
-                    onClick={() => setIsEditingName(false)}
-                    className="p-1 bg-slate-800 hover:bg-slate-700 text-slate-400 rounded cursor-pointer transition-colors text-[10px] w-5 h-5 flex items-center justify-center"
-                  >
-                    ✕
-                  </button>
-                </div>
-              ) : (
-                <div className="flex items-center gap-2">
-                  <div className="flex flex-col">
-                    <span className="text-[8px] text-amber-500 uppercase tracking-wider font-extrabold leading-none mb-0.5">{t.activeSinger}</span>
-                    <select
-                      value={userName}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setUserName(val);
-                        setEditedName(val);
-                        try {
-                          localStorage.setItem('adventist_karaoke_name', val);
-                        } catch(err){}
-                      }}
-                      className="bg-transparent text-xs font-bold text-slate-100 border-none outline-none focus:ring-0 p-0 pr-6 cursor-pointer min-w-[90px] max-w-[140px] truncate"
-                    >
-                      {!competitors.some(c => c.name === userName) && (
-                        <option value={userName} className="bg-slate-950 text-slate-100">{userName}</option>
-                      )}
-                      {competitors.map((c) => (
-                        <option key={c.name} value={c.name} className="bg-slate-950 text-slate-100">
-                          {c.avatar} {c.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+              {/* Selector dropdown */}
+              <div className="flex flex-col text-left">
+                <span className="text-[8px] text-amber-500 uppercase tracking-wider font-extrabold leading-none mb-0.5">
+                  {t.activeSinger}
+                </span>
+                <select
+                  value={userName}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setUserName(val);
+                    setEditedName(val);
+                    try {
+                      localStorage.setItem('adventist_karaoke_active_singer', val);
+                    } catch(err){}
+                  }}
+                  className="bg-transparent text-xs font-bold text-slate-100 border-none outline-none focus:ring-0 p-0 pr-6 cursor-pointer min-w-[90px] max-w-[130px] truncate"
+                >
+                  {/* Primary Profile Option */}
+                  <option value={profileName} className="bg-slate-950 text-slate-100">
+                    {profileName} (Você)
+                  </option>
                   
-                  <button
-                    onClick={() => {
-                      setEditedName(userName);
-                      setIsEditingName(true);
-                    }}
-                    className="text-slate-500 hover:text-amber-400 transition-colors cursor-pointer p-1 rounded hover:bg-white/5"
-                    title={appLanguage === 'pt' ? 'Editar nome' : appLanguage === 'en' ? 'Edit name' : 'Editar nombre'}
-                  >
-                    <Edit3 className="h-3 w-3" />
-                  </button>
-                </div>
-              )}
+                  {/* Competitor friends options */}
+                  {competitors.filter(c => c.name !== profileName).map((c) => (
+                    <option key={c.name} value={c.name} className="bg-slate-950 text-slate-100">
+                      {c.avatar && (c.avatar.startsWith('data:') || c.avatar.startsWith('http')) ? '👤' : c.avatar} {c.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Edit Primary Profile Button */}
+              <button
+                type="button"
+                onClick={() => {
+                  setEditedName(profileName);
+                  setIsEditingProfile(true);
+                }}
+                className="text-slate-500 hover:text-amber-400 p-1 hover:bg-white/5 rounded transition-colors"
+                title={appLanguage === 'pt' ? 'Configurar Perfil de Cantor' : appLanguage === 'en' ? 'Configure Singer Profile' : 'Configurar Perfil de Cantor'}
+              >
+                <Edit3 className="h-3 w-3" />
+              </button>
             </div>
+
 
             {/* Menu options selectors when not active singing */}
             {view !== 'singing' && (
@@ -538,6 +669,8 @@ export default function App() {
               setView('singing');
             }}
             appLanguage={appLanguage}
+            loginEmail={loginEmail}
+            onLogin={handleLogin}
           />
         )}
       </main>
@@ -583,6 +716,103 @@ export default function App() {
           </motion.button>
         )}
       </AnimatePresence>
+
+      {/* Profile Editing Modal (Mounted at Root to avoid parent backdrop-blur clipping issues) */}
+      {isEditingProfile && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md overflow-y-auto">
+          <div className="bg-slate-900/95 border border-white/10 rounded-2xl w-full max-w-sm p-5 sm:p-6 shadow-2xl relative text-left my-auto max-h-[90vh] overflow-y-auto scrollbar-none">
+            <h3 className="font-display font-bold text-base sm:text-lg text-white mb-3">
+              {appLanguage === 'pt' ? 'Configurar Perfil de Cantor' : appLanguage === 'en' ? 'Configure Singer Profile' : 'Configurar Perfil de Cantor'}
+            </h3>
+            
+            {/* Avatar Preview */}
+            <div className="flex flex-col items-center gap-2 mb-4">
+              <div className="relative group">
+                <div className="h-16 w-16 sm:h-20 sm:w-20 rounded-full bg-slate-800 border-2 border-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.25)] flex items-center justify-center text-3xl sm:text-4xl overflow-hidden">
+                  {userAvatar.startsWith('data:') || userAvatar.startsWith('http') ? (
+                    <img src={userAvatar} alt="Foto de perfil" className="h-full w-full object-cover" />
+                  ) : (
+                    <span className="text-3xl sm:text-4xl">{userAvatar}</span>
+                  )}
+                </div>
+                <label className="absolute -bottom-1 -right-1 bg-amber-500 hover:bg-amber-400 text-slate-950 p-1.5 sm:p-2 rounded-full cursor-pointer shadow-md transition-all">
+                  <Camera className="h-3.5 w-3.5" />
+                  <input 
+                    type="file" 
+                    accept="image/*" 
+                    className="hidden" 
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        const reader = new FileReader();
+                        reader.onloadend = () => {
+                          setUserAvatar(reader.result as string);
+                        };
+                        reader.readAsDataURL(file);
+                      }
+                    }}
+                  />
+                </label>
+              </div>
+              <p className="text-[9px] text-slate-400 font-medium text-center leading-tight">
+                {appLanguage === 'pt' ? 'Adicione sua própria foto ou escolha um emoji abaixo' : appLanguage === 'en' ? 'Add your own photo or choose an emoji below' : 'Agregue su propia foto o elija un emoji abajo'}
+              </p>
+            </div>
+
+            {/* Preset Emojis Selector */}
+            <div className="mb-4">
+              <label className="block text-[10px] uppercase tracking-wider text-slate-400 font-bold mb-1.5">
+                {appLanguage === 'pt' ? 'Escolher Emoji' : appLanguage === 'en' ? 'Choose Emoji' : 'Elegir Emoji'}
+              </label>
+              <div className="grid grid-cols-6 gap-1.5 bg-slate-950/40 p-2 rounded-xl border border-white/5 max-h-[85px] overflow-y-auto">
+                {['🎤', '🌟', '⚡', '🎵', '🎸', '🌸', '✨', '🕊️', '👑', '🦁', '✝️', '⛵', '🍕', '🚀', '💎', '🎨', '🦖', '🐼'].map((emoji) => (
+                  <button
+                    key={emoji}
+                    type="button"
+                    onClick={() => setUserAvatar(emoji)}
+                    className={`text-lg p-1 rounded-lg hover:bg-white/10 transition-colors ${userAvatar === emoji ? 'bg-amber-500/20 border border-amber-500/50' : ''}`}
+                  >
+                    {emoji}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Name Input */}
+            <div className="mb-4">
+              <label className="block text-[10px] uppercase tracking-wider text-slate-400 font-bold mb-1">
+                {appLanguage === 'pt' ? 'Nome do Cantor' : appLanguage === 'en' ? 'Singer Name' : 'Nombre del Cantor'}
+              </label>
+              <input
+                type="text"
+                maxLength={15}
+                value={editedName}
+                onChange={(e) => setEditedName(e.target.value)}
+                className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500/50 transition-colors"
+                placeholder={appLanguage === 'pt' ? 'Seu nome' : appLanguage === 'en' ? 'Your name' : 'Su nombre'}
+              />
+            </div>
+
+            {/* Actions */}
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setIsEditingProfile(false)}
+                className="flex-1 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-300 transition-colors cursor-pointer text-center"
+              >
+                {appLanguage === 'pt' ? 'Cancelar' : appLanguage === 'en' ? 'Cancel' : 'Cancelar'}
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSaveProfile(editedName, userAvatar)}
+                className="flex-1 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-xs font-black text-slate-950 shadow-md transition-colors cursor-pointer text-center"
+              >
+                {appLanguage === 'pt' ? 'Salvar' : appLanguage === 'en' ? 'Save' : 'Guardar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -575,8 +575,12 @@ export default function ProjectorView() {
                             </span>
                             
                             {/* Avatar Icon */}
-                            <span className="text-2xl h-10 w-10 bg-slate-900/60 rounded-xl border border-white/5 flex items-center justify-center">
-                              {competitor.avatar}
+                            <span className="text-2xl h-10 w-10 bg-slate-900/60 rounded-xl border border-white/5 flex items-center justify-center overflow-hidden">
+                              {competitor.avatar && (competitor.avatar.startsWith('data:') || competitor.avatar.startsWith('http')) ? (
+                                <img src={competitor.avatar} alt={competitor.name} className="h-full w-full object-cover" referrerPolicy="no-referrer" />
+                              ) : (
+                                competitor.avatar
+                              )}
                             </span>
 
                             {/* Competitor Name */}
