@@ -646,7 +646,7 @@ export default function AdminManager({
               </label>
               <input
                 type="text"
-                name="admin_login_email"
+                name="login_user_identifier"
                 required
                 value={emailInput}
                 onChange={(e) => setEmailInput(e.target.value)}
@@ -661,12 +661,13 @@ export default function AdminManager({
                 {appLanguage === 'pt' ? 'Senha (opcional)' : appLanguage === 'en' ? 'Password (optional)' : 'Contraseña (opcional)'}
               </label>
               <input
-                type="password"
-                name="admin_login_password"
+                type="text"
+                name="login_user_secret_mask"
                 value={passwordInput}
                 onChange={(e) => setPasswordInput(e.target.value)}
                 placeholder="••••••••"
-                autoComplete="new-password"
+                autoComplete="off"
+                style={{ WebkitTextSecurity: 'disc' } as React.CSSProperties}
                 className="w-full bg-slate-950/80 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500/50 transition-colors"
               />
             </div>
@@ -791,14 +792,16 @@ export default function AdminManager({
                 {appLanguage === 'pt' ? 'Configurar APIs' : 'Configure APIs'}
               </button>
 
-              <button
-                type="button"
-                onClick={handleAddNewSongClick}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 px-4 py-2.5 text-xs font-black text-slate-950 shadow-lg shadow-amber-500/10 hover:shadow-amber-500/25 transition-all duration-300 cursor-pointer select-none w-full md:w-auto justify-center"
-              >
-                <PlusCircle className="h-4 w-4" />
-                {appLanguage === 'pt' ? 'Nova Música' : appLanguage === 'en' ? 'New Song' : 'Nueva Canción'}
-              </button>
+              {loginEmail === 'ronaldosonic@gmail.com' && (
+                <button
+                  type="button"
+                  onClick={handleAddNewSongClick}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 px-4 py-2.5 text-xs font-black text-slate-950 shadow-lg shadow-amber-500/10 hover:shadow-amber-500/25 transition-all duration-300 cursor-pointer select-none w-full md:w-auto justify-center"
+                >
+                  <PlusCircle className="h-4 w-4" />
+                  {appLanguage === 'pt' ? 'Nova Música' : appLanguage === 'en' ? 'New Song' : 'Nueva Canción'}
+                </button>
+              )}
             </div>
           </div>
 
@@ -948,12 +951,14 @@ export default function AdminManager({
                     ? 'Be the first to load a song of your choice! You can input the lyrics and calibrate the rhythm step by step.'
                     : '¡Sé el primero en cargar una alabanza de tu elección! Podrás ingresar la letra y calibrar el ritmo paso a paso.'}
                 </p>
-                <button
-                  onClick={handleAddNewSongClick}
-                  className="px-4 py-2 text-xs font-bold text-amber-400 border border-amber-500/20 hover:border-amber-400/50 hover:bg-amber-500/5 rounded-xl transition-all cursor-pointer"
-                >
-                  {appLanguage === 'pt' ? 'Criar Primeiro Louvor' : appLanguage === 'en' ? 'Create First Song' : 'Crear Primera Alabanza'}
-                </button>
+                {loginEmail === 'ronaldosonic@gmail.com' && (
+                  <button
+                    onClick={handleAddNewSongClick}
+                    className="px-4 py-2 text-xs font-bold text-amber-400 border border-amber-500/20 hover:border-amber-400/50 hover:bg-amber-500/5 rounded-xl transition-all cursor-pointer"
+                  >
+                    {appLanguage === 'pt' ? 'Criar Primeiro Louvor' : appLanguage === 'en' ? 'Create First Song' : 'Crear Primera Alabanza'}
+                  </button>
+                )}
               </div>
             ) : (
               <div className="divide-y divide-white/5 bg-slate-950/20">
@@ -990,22 +995,26 @@ export default function AdminManager({
                         <span className="hidden sm:inline">{appLanguage === 'pt' ? 'Cantar' : appLanguage === 'en' ? 'Sing' : 'Cantar'}</span>
                       </button>
 
-                      <button
-                        onClick={() => handleEditCustomSong(song)}
-                        className="p-2 bg-slate-800 hover:bg-slate-700 border border-white/10 hover:border-white/20 text-amber-400 hover:text-amber-300 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
-                        title={appLanguage === 'pt' ? 'Editar' : appLanguage === 'en' ? 'Edit' : 'Editar'}
-                      >
-                        <Edit className="h-3.5 w-3.5" />
-                        <span className="hidden sm:inline">{appLanguage === 'pt' ? 'Editar' : appLanguage === 'en' ? 'Edit' : 'Editar'}</span>
-                      </button>
-                      
-                      <button
-                        onClick={() => handleDeleteCustomSong(song.id, song.title)}
-                        className="p-2 bg-red-500/10 hover:bg-red-500 border border-red-500/20 hover:border-red-500/50 text-red-400 hover:text-white rounded-lg transition-all cursor-pointer"
-                        title={appLanguage === 'pt' ? 'Excluir permanentemente' : appLanguage === 'en' ? 'Delete permanently' : 'Eliminar permanentemente'}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
+                      {loginEmail === 'ronaldosonic@gmail.com' && (
+                        <>
+                          <button
+                            onClick={() => handleEditCustomSong(song)}
+                            className="p-2 bg-slate-800 hover:bg-slate-700 border border-white/10 hover:border-white/20 text-amber-400 hover:text-amber-300 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
+                            title={appLanguage === 'pt' ? 'Editar' : appLanguage === 'en' ? 'Edit' : 'Editar'}
+                          >
+                            <Edit className="h-3.5 w-3.5" />
+                            <span className="hidden sm:inline">{appLanguage === 'pt' ? 'Editar' : appLanguage === 'en' ? 'Edit' : 'Editar'}</span>
+                          </button>
+                          
+                          <button
+                            onClick={() => handleDeleteCustomSong(song.id, song.title)}
+                            className="p-2 bg-red-500/10 hover:bg-red-500 border border-red-500/20 hover:border-red-500/50 text-red-400 hover:text-white rounded-lg transition-all cursor-pointer"
+                            title={appLanguage === 'pt' ? 'Excluir permanentemente' : appLanguage === 'en' ? 'Delete permanently' : 'Eliminar permanentemente'}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </>
+                      )}
                     </div>
                   </div>
                 ))}
