@@ -105,7 +105,13 @@ export default function App() {
     }
   });
   const [showMockGoogleLogin, setShowMockGoogleLogin] = useState(false);
-  const [googleClientId, setGoogleClientId] = useState<string>('');
+  const [googleClientId, setGoogleClientId] = useState<string>(() => {
+    try {
+      return localStorage.getItem('adventist_google_client_id') || '';
+    } catch (e) {
+      return '';
+    }
+  });
 
   // Fetch dynamic configurations from server on mount
   useEffect(() => {
@@ -114,6 +120,11 @@ export default function App() {
       .then((data) => {
         if (data.googleClientId) {
           setGoogleClientId(data.googleClientId);
+          try {
+            localStorage.setItem('adventist_google_client_id', data.googleClientId);
+          } catch (e) {
+            console.error('Failed to save fetched google client id:', e);
+          }
           console.log('Google Client ID fetched successfully:', data.googleClientId);
         }
       })
@@ -121,6 +132,15 @@ export default function App() {
         console.error('Failed to fetch config from server:', err);
       });
   }, []);
+
+  const handleUpdateGoogleClientId = (id: string) => {
+    setGoogleClientId(id);
+    try {
+      localStorage.setItem('adventist_google_client_id', id);
+    } catch (e) {
+      console.error('Failed to save manual google client id:', e);
+    }
+  };
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent | TouchEvent) {
@@ -991,6 +1011,8 @@ export default function App() {
             appLanguage={appLanguage}
             loginEmail={loginEmail}
             onLogin={handleLogin}
+            googleClientId={googleClientId}
+            onUpdateGoogleClientId={handleUpdateGoogleClientId}
           />
         )}
       </main>

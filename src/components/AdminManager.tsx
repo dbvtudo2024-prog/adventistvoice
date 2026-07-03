@@ -22,6 +22,8 @@ interface AdminManagerProps {
   appLanguage: AppLanguage;
   loginEmail: string | null;
   onLogin: (email: string | null) => void;
+  googleClientId: string;
+  onUpdateGoogleClientId: (id: string) => void;
 }
 
 export default function AdminManager({ 
@@ -31,7 +33,9 @@ export default function AdminManager({
   onSelectAndPlay,
   appLanguage,
   loginEmail,
-  onLogin
+  onLogin,
+  googleClientId,
+  onUpdateGoogleClientId
 }: AdminManagerProps) {
   const t = translations[appLanguage];
 
@@ -39,6 +43,12 @@ export default function AdminManager({
   const [emailInput, setEmailInput] = useState('');
   const [passwordInput, setPasswordInput] = useState('');
   const [loginError, setLoginError] = useState('');
+  const [googleClientIdInput, setGoogleClientIdInput] = useState(googleClientId || '');
+
+  // Keep state in sync if prop changes
+  useEffect(() => {
+    setGoogleClientIdInput(googleClientId || '');
+  }, [googleClientId]);
   
   // Navigation View Mode
   const [adminView, setAdminView] = useState<'list' | 'add' | 'sync'>('list');
@@ -635,11 +645,13 @@ export default function AdminManager({
                 {appLanguage === 'pt' ? 'E-mail' : appLanguage === 'en' ? 'Email' : 'Correo electrónico'}
               </label>
               <input
-                type="email"
+                type="text"
+                name="admin_login_email"
                 required
                 value={emailInput}
                 onChange={(e) => setEmailInput(e.target.value)}
                 placeholder="exemplo@gmail.com"
+                autoComplete="off"
                 className="w-full bg-slate-950/80 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500/50 transition-colors"
               />
             </div>
@@ -650,9 +662,11 @@ export default function AdminManager({
               </label>
               <input
                 type="password"
+                name="admin_login_password"
                 value={passwordInput}
                 onChange={(e) => setPasswordInput(e.target.value)}
                 placeholder="••••••••"
+                autoComplete="new-password"
                 className="w-full bg-slate-950/80 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500/50 transition-colors"
               />
             </div>
@@ -773,8 +787,8 @@ export default function AdminManager({
                     : 'bg-slate-900 hover:bg-slate-850 text-slate-200 border-white/5'
                 }`}
               >
-                <Database className="h-4 w-4" />
-                {appLanguage === 'pt' ? 'Conectar Supabase' : 'Connect Supabase'}
+                <Settings2 className="h-4 w-4 text-amber-500" />
+                {appLanguage === 'pt' ? 'Configurar APIs' : 'Configure APIs'}
               </button>
 
               <button
@@ -788,87 +802,121 @@ export default function AdminManager({
             </div>
           </div>
 
-          {/* Collapsible Supabase Direct Settings Card */}
+          {/* Collapsible Integration Settings Card */}
           {showDbSettings && (
             <div className="bg-slate-950/60 border border-white/5 rounded-2xl p-5 text-left space-y-4 shadow-xl">
-              <div className="flex justify-between items-start">
-                <div>
-                  <h4 className="text-sm font-black text-white flex items-center gap-2">
-                    <Database className="h-4 w-4 text-amber-500" />
-                    Configurações do Banco de Dados Supabase (Conexão Direta)
-                  </h4>
-                  <p className="text-[11px] text-slate-400 mt-0.5 leading-relaxed">
-                    Hospedagens estáticas como o Vercel não possuem um servidor Node.js ativo rodando em segundo plano. 
-                    Configurando as credenciais do Supabase diretamente aqui, seu navegador fará a gravação e a leitura dos louvores customizados <strong>diretamente da nuvem</strong>, sem depender de rotas API locais do servidor.
-                  </p>
-                </div>
-                <span className={`px-2 py-0.5 rounded text-[9px] font-black tracking-wider uppercase leading-none ${
-                  isDbConfigured ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/25' : 'bg-amber-500/10 text-amber-500 border border-amber-500/25'
-                }`}>
-                  {isDbConfigured ? '● Ativo no Navegador' : '● Offline / Local'}
-                </span>
+              <div>
+                <h4 className="text-sm font-black text-white flex items-center gap-2">
+                  <Settings2 className="h-4 w-4 text-amber-500" />
+                  Configurações de APIs e Integrações
+                </h4>
+                <p className="text-[11px] text-slate-400 mt-0.5 leading-relaxed">
+                  Gerencie as chaves e credenciais para o Login com o Google e o Banco de Dados em nuvem do Supabase.
+                </p>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+              {/* Section 1: Google Sign-In Client ID */}
+              <div className="border-t border-white/5 pt-4 space-y-3">
+                <h5 className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                  <span className="text-amber-500 font-bold">1.</span> Login com o Google (Autenticação)
+                </h5>
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Supabase URL (API URL)</label>
-                  <input
-                    type="text"
-                    value={dbUrl}
-                    onChange={(e) => setDbUrl(e.target.value)}
-                    placeholder="https://your-project.supabase.co"
-                    className="w-full rounded-xl bg-slate-900 border border-white/10 px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500 transition-all font-mono"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Supabase Anon Key (Public Key)</label>
-                  <input
-                    type="password"
-                    value={dbKey}
-                    onChange={(e) => setDbKey(e.target.value)}
-                    placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-                    className="w-full rounded-xl bg-slate-900 border border-white/10 px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500 transition-all font-mono"
-                  />
-                </div>
-              </div>
-
-              <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-white/5">
-                <div className="text-[10px] text-slate-500 leading-normal max-w-md">
-                  Para criar a tabela em seu Supabase, use a query: <code className="bg-slate-900 px-1 py-0.5 rounded font-mono text-amber-500">create table custom_songs (...);</code> disponível no manual ou contate o desenvolvedor.
-                </div>
-                <div className="flex items-center gap-2">
-                  {isDbConfigured && (
+                  <label className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Google Client ID</label>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <input
+                      type="text"
+                      value={googleClientIdInput}
+                      onChange={(e) => setGoogleClientIdInput(e.target.value)}
+                      placeholder="seu-id-do-google.apps.googleusercontent.com"
+                      className="flex-1 rounded-xl bg-slate-900 border border-white/10 px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-amber-500 transition-all font-mono"
+                    />
                     <button
                       type="button"
                       onClick={() => {
-                        clearSupabaseCredentials();
-                        alert("Credenciais removidas. O aplicativo agora usará o servidor ou armazenamento local.");
+                        onUpdateGoogleClientId(googleClientIdInput);
+                        alert("Google Client ID atualizado com sucesso no navegador!");
+                      }}
+                      className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black rounded-xl transition-all cursor-pointer whitespace-nowrap"
+                    >
+                      Salvar Google ID
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-slate-500 leading-normal">
+                    O ID do cliente Google é usado para habilitar o login oficial via Google GSI. Você pode obter este ID no Console de Desenvolvedores Google Cloud (OAuth 2.0 Client Credentials).
+                  </p>
+                </div>
+              </div>
+
+              {/* Section 2: Supabase database connection */}
+              <div className="border-t border-white/5 pt-4 space-y-3">
+                <h5 className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                  <span className="text-amber-500 font-bold">2.</span> Banco de Dados Supabase (Conexão Direta)
+                </h5>
+                <p className="text-[11px] text-slate-400 leading-relaxed">
+                  Configurando as credenciais do Supabase diretamente aqui, seu navegador fará a gravação e a leitura dos louvores customizados <strong>diretamente da nuvem</strong>, sem depender de rotas API locais do servidor.
+                </p>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Supabase URL (API URL)</label>
+                    <input
+                      type="text"
+                      value={dbUrl}
+                      onChange={(e) => setDbUrl(e.target.value)}
+                      placeholder="https://your-project.supabase.co"
+                      className="w-full rounded-xl bg-slate-900 border border-white/10 px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-amber-500 transition-all font-mono"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Supabase Anon Key (Public Key)</label>
+                    <input
+                      type="password"
+                      value={dbKey}
+                      onChange={(e) => setDbKey(e.target.value)}
+                      placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                      className="w-full rounded-xl bg-slate-900 border border-white/10 px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-amber-500 transition-all font-mono"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-white/5 mt-4">
+                  <div className="text-[10px] text-slate-500 leading-normal max-w-md">
+                    Para criar a tabela em seu Supabase, use a query: <code className="bg-slate-900 px-1 py-0.5 rounded font-mono text-amber-500">create table custom_songs (...);</code>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {isDbConfigured && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          clearSupabaseCredentials();
+                          alert("Credenciais removidas. O aplicativo agora usará o servidor ou armazenamento local.");
+                          window.location.reload();
+                        }}
+                        className="px-3.5 py-2 rounded-xl text-xs font-bold text-red-400 bg-red-500/10 hover:bg-red-500/20 transition-all cursor-pointer border border-red-500/10"
+                      >
+                        Remover Conexão
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!dbUrl.trim() || !dbKey.trim()) {
+                          alert("Por favor, preencha ambos os campos!");
+                          return;
+                        }
+                        if (!dbUrl.startsWith("http://") && !dbUrl.startsWith("https://")) {
+                          alert("A URL do Supabase deve começar with http:// ou https://");
+                          return;
+                        }
+                        saveSupabaseCredentials(dbUrl, dbKey);
+                        alert("Excelente! Credenciais do Supabase salvas localmente no navegador. A página será recarregada para ativar a sincronização na nuvem.");
                         window.location.reload();
                       }}
-                      className="px-3.5 py-2 rounded-xl text-xs font-bold text-red-400 bg-red-500/10 hover:bg-red-500/20 transition-all cursor-pointer border border-red-500/10"
+                      className="px-4 py-2 rounded-xl text-xs font-black text-slate-950 bg-amber-500 hover:bg-amber-400 transition-all shadow-md cursor-pointer"
                     >
-                      Remover Conexão
+                      Salvar e Conectar
                     </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (!dbUrl.trim() || !dbKey.trim()) {
-                        alert("Por favor, preencha ambos os campos!");
-                        return;
-                      }
-                      if (!dbUrl.startsWith("http://") && !dbUrl.startsWith("https://")) {
-                        alert("A URL do Supabase deve começar com http:// ou https://");
-                        return;
-                      }
-                      saveSupabaseCredentials(dbUrl, dbKey);
-                      alert("Excelente! Credenciais do Supabase salvas localmente no navegador. A página será recarregada para ativar a sincronização na nuvem.");
-                      window.location.reload();
-                    }}
-                    className="px-4 py-2 rounded-xl text-xs font-black text-slate-950 bg-amber-500 hover:bg-amber-400 transition-all shadow-md cursor-pointer"
-                  >
-                    Salvar e Conectar
-                  </button>
+                  </div>
                 </div>
               </div>
             </div>
