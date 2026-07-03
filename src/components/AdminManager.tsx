@@ -5,8 +5,14 @@ import {
   Plus, Trash2, Play, Pause, Save, RotateCcw, FileAudio, Music, 
   Settings2, HelpCircle, CheckCircle2, ChevronRight, Sliders, 
   Trash, Calendar, ArrowLeft, ArrowRight, ShieldCheck, RefreshCw,
-  PlusCircle, Edit, Undo
+  PlusCircle, Edit, Undo, Database
 } from 'lucide-react';
+import { 
+  getSupabaseCredentials, 
+  saveSupabaseCredentials, 
+  clearSupabaseCredentials, 
+  isSupabaseConfiguredClient 
+} from '../utils/supabaseClient';
 
 interface AdminManagerProps {
   customSongs: Song[];
@@ -70,6 +76,20 @@ export default function AdminManager({
   // Handle Drag & Drop of Audio Files
   const [isDragging, setIsDragging] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+
+  // Supabase direct client settings state
+  const [dbUrl, setDbUrl] = useState('');
+  const [dbKey, setDbKey] = useState('');
+  const [showDbSettings, setShowDbSettings] = useState(false);
+  const [isDbConfigured, setIsDbConfigured] = useState(false);
+
+  // Carrega as credenciais existentes ao montar o componente
+  useEffect(() => {
+    const creds = getSupabaseCredentials();
+    setDbUrl(creds.url);
+    setDbKey(creds.anonKey);
+    setIsDbConfigured(isSupabaseConfiguredClient());
+  }, []);
 
   // Projection / singing stage settings
   const [scoreMode, setScoreMode] = useState(() => {
@@ -715,10 +735,17 @@ export default function AdminManager({
       {/* VIEW A: LIST SONGS DASHBOARD */}
       {adminView === 'list' && (
         <div className="space-y-6">
-          <div className="flex justify-between items-center bg-slate-950/40 border border-white/5 p-4 rounded-xl">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center bg-slate-950/40 border border-white/5 p-4 rounded-xl gap-4">
             <div className="text-left font-display">
-              <h3 className="text-sm font-bold text-slate-200">
+              <h3 className="text-sm font-bold text-slate-200 flex items-center gap-2">
                 {appLanguage === 'pt' ? 'Adicione e Sincronize' : appLanguage === 'en' ? 'Add & Synchronize' : 'Agrega y Sincroniza'}
+                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${
+                  isDbConfigured 
+                    ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
+                    : 'bg-amber-500/10 text-amber-500 border border-amber-500/20'
+                }`}>
+                  {isDbConfigured ? 'Supabase Online' : 'Apenas Local / Express'}
+                </span>
               </h3>
               <p className="text-[11px] text-slate-400">
                 {appLanguage === 'pt' ? (
@@ -731,14 +758,116 @@ export default function AdminManager({
               </p>
             </div>
             
-            <button
-              onClick={handleAddNewSongClick}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 px-4 py-2.5 text-xs font-black text-slate-950 shadow-lg shadow-amber-500/10 hover:shadow-amber-500/25 transition-all duration-300 cursor-pointer select-none"
-            >
-              <PlusCircle className="h-4 w-4" />
-              {appLanguage === 'pt' ? 'Nova Música' : appLanguage === 'en' ? 'New Song' : 'Nueva Canción'}
-            </button>
+            <div className="flex items-center gap-2 w-full md:w-auto">
+              <button
+                type="button"
+                onClick={() => setShowDbSettings(!showDbSettings)}
+                className={`inline-flex items-center gap-1.5 rounded-xl px-4 py-2.5 text-xs font-black transition-all cursor-pointer select-none border w-full md:w-auto justify-center ${
+                  showDbSettings 
+                    ? 'bg-white/10 text-white border-white/20' 
+                    : 'bg-slate-900 hover:bg-slate-850 text-slate-200 border-white/5'
+                }`}
+              >
+                <Database className="h-4 w-4" />
+                {appLanguage === 'pt' ? 'Conectar Supabase' : 'Connect Supabase'}
+              </button>
+
+              <button
+                type="button"
+                onClick={handleAddNewSongClick}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 px-4 py-2.5 text-xs font-black text-slate-950 shadow-lg shadow-amber-500/10 hover:shadow-amber-500/25 transition-all duration-300 cursor-pointer select-none w-full md:w-auto justify-center"
+              >
+                <PlusCircle className="h-4 w-4" />
+                {appLanguage === 'pt' ? 'Nova Música' : appLanguage === 'en' ? 'New Song' : 'Nueva Canción'}
+              </button>
+            </div>
           </div>
+
+          {/* Collapsible Supabase Direct Settings Card */}
+          {showDbSettings && (
+            <div className="bg-slate-950/60 border border-white/5 rounded-2xl p-5 text-left space-y-4 shadow-xl">
+              <div className="flex justify-between items-start">
+                <div>
+                  <h4 className="text-sm font-black text-white flex items-center gap-2">
+                    <Database className="h-4 w-4 text-amber-500" />
+                    Configurações do Banco de Dados Supabase (Conexão Direta)
+                  </h4>
+                  <p className="text-[11px] text-slate-400 mt-0.5 leading-relaxed">
+                    Hospedagens estáticas como o Vercel não possuem um servidor Node.js ativo rodando em segundo plano. 
+                    Configurando as credenciais do Supabase diretamente aqui, seu navegador fará a gravação e a leitura dos louvores customizados <strong>diretamente da nuvem</strong>, sem depender de rotas API locais do servidor.
+                  </p>
+                </div>
+                <span className={`px-2 py-0.5 rounded text-[9px] font-black tracking-wider uppercase leading-none ${
+                  isDbConfigured ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/25' : 'bg-amber-500/10 text-amber-500 border border-amber-500/25'
+                }`}>
+                  {isDbConfigured ? '● Ativo no Navegador' : '● Offline / Local'}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Supabase URL (API URL)</label>
+                  <input
+                    type="text"
+                    value={dbUrl}
+                    onChange={(e) => setDbUrl(e.target.value)}
+                    placeholder="https://your-project.supabase.co"
+                    className="w-full rounded-xl bg-slate-900 border border-white/10 px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500 transition-all font-mono"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Supabase Anon Key (Public Key)</label>
+                  <input
+                    type="password"
+                    value={dbKey}
+                    onChange={(e) => setDbKey(e.target.value)}
+                    placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                    className="w-full rounded-xl bg-slate-900 border border-white/10 px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500 transition-all font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-white/5">
+                <div className="text-[10px] text-slate-500 leading-normal max-w-md">
+                  Para criar a tabela em seu Supabase, use a query: <code className="bg-slate-900 px-1 py-0.5 rounded font-mono text-amber-500">create table custom_songs (...);</code> disponível no manual ou contate o desenvolvedor.
+                </div>
+                <div className="flex items-center gap-2">
+                  {isDbConfigured && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        clearSupabaseCredentials();
+                        alert("Credenciais removidas. O aplicativo agora usará o servidor ou armazenamento local.");
+                        window.location.reload();
+                      }}
+                      className="px-3.5 py-2 rounded-xl text-xs font-bold text-red-400 bg-red-500/10 hover:bg-red-500/20 transition-all cursor-pointer border border-red-500/10"
+                    >
+                      Remover Conexão
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!dbUrl.trim() || !dbKey.trim()) {
+                        alert("Por favor, preencha ambos os campos!");
+                        return;
+                      }
+                      if (!dbUrl.startsWith("http://") && !dbUrl.startsWith("https://")) {
+                        alert("A URL do Supabase deve começar com http:// ou https://");
+                        return;
+                      }
+                      saveSupabaseCredentials(dbUrl, dbKey);
+                      alert("Excelente! Credenciais do Supabase salvas localmente no navegador. A página será recarregada para ativar a sincronização na nuvem.");
+                      window.location.reload();
+                    }}
+                    className="px-4 py-2 rounded-xl text-xs font-black text-slate-950 bg-amber-500 hover:bg-amber-400 transition-all shadow-md cursor-pointer"
+                  >
+                    Salvar e Conectar
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="glass-panel rounded-2xl overflow-hidden border border-white/5">
             <div className="p-4.5 border-b border-white/5 bg-slate-950/50 flex justify-between items-center">

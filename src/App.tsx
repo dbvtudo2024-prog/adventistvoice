@@ -9,6 +9,7 @@ import ProjectorView from './components/ProjectorView';
 import { Mic, Trophy, Music, User, Flame, Disc, Shield, Settings2, Edit3, Check, ChevronUp, ChevronDown, Camera, Upload } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { AppLanguage, translations } from './utils/translations';
+import { isSupabaseConfiguredClient, fetchCustomSongsClient, saveCustomSongsClient } from './utils/supabaseClient';
 
 export default function App() {
   const isProjector = typeof window !== 'undefined' && window.location.search.includes('projector=true');
@@ -114,66 +115,67 @@ export default function App() {
         localStorage.setItem('adventist_karaoke_competitors', JSON.stringify([]));
       }
 
-      // Carrega músicas compartilhadas do servidor Express
-      fetch('/api/custom-songs')
-        .then(res => res.json())
-        .then(async (serverSongs: Song[]) => {
-          if (Array.isArray(serverSongs)) {
-            let finalSongs = [...serverSongs];
-            
-            // Mescla com as músicas do localStorage se houver alguma que ainda não está no servidor
-            const savedCustomSongs = localStorage.getItem('adventist_karaoke_custom_songs');
-            if (savedCustomSongs) {
-              try {
-                const localSongs: Song[] = JSON.parse(savedCustomSongs);
-                localSongs.forEach(ls => {
-                  if (!finalSongs.some(fs => fs.id === ls.id)) {
-                    finalSongs.push(ls);
-                  }
-                });
-              } catch (e) {}
+      // Carrega músicas compartilhadas (seja direto do Supabase no client-side ou do servidor Express)
+      const loadSongs = async () => {
+        let serverSongs: Song[] = [];
+        try {
+          if (isSupabaseConfiguredClient()) {
+            console.log("Supabase configured on client. Fetching songs directly...");
+            serverSongs = await fetchCustomSongsClient();
+          } else {
+            const res = await fetch('/api/custom-songs');
+            const contentType = res.headers.get("content-type");
+            if (contentType && contentType.includes("application/json")) {
+              serverSongs = await res.json();
+            } else {
+              throw new Error("Resposta do servidor não é JSON válido");
             }
-            
-            setCustomSongs(finalSongs);
-            
-            // Carrega arquivos de áudio binários do IndexedDB de forma assíncrona
-            import('./utils/audioStorage').then(async ({ getSongAudio }) => {
-              const songsWithAudio = await Promise.all(
-                finalSongs.map(async (song) => {
-                  const audioFile = await getSongAudio(song.id);
-                  if (audioFile) {
-                    return { ...song, audioFile };
-                  }
-                  return song;
-                })
-              );
-              setCustomSongs(songsWithAudio);
-            }).catch(err => console.error("Falha ao carregar áudios do IndexedDB:", err));
           }
-        })
-        .catch(err => {
-          console.error("Falha ao carregar músicas do servidor, usando localStorage:", err);
+        } catch (err) {
+          console.error("Falha ao carregar músicas do servidor/Supabase, usando localStorage:", err);
           const savedCustomSongs = localStorage.getItem('adventist_karaoke_custom_songs');
           if (savedCustomSongs) {
             try {
-              const parsedSongs: Song[] = JSON.parse(savedCustomSongs);
-              setCustomSongs(parsedSongs);
-              
-              import('./utils/audioStorage').then(async ({ getSongAudio }) => {
-                const songsWithAudio = await Promise.all(
-                  parsedSongs.map(async (song) => {
-                    const audioFile = await getSongAudio(song.id);
-                    if (audioFile) {
-                      return { ...song, audioFile };
-                    }
-                    return song;
-                  })
-                );
-                setCustomSongs(songsWithAudio);
-              }).catch(err => console.error("Falha ao carregar áudios do IndexedDB:", err));
+              serverSongs = JSON.parse(savedCustomSongs);
             } catch (e) {}
           }
-        });
+        }
+
+        if (Array.isArray(serverSongs)) {
+          let finalSongs = [...serverSongs];
+          
+          // Mescla com as músicas do localStorage se houver alguma que ainda não está na lista
+          const savedCustomSongs = localStorage.getItem('adventist_karaoke_custom_songs');
+          if (savedCustomSongs) {
+            try {
+              const localSongs: Song[] = JSON.parse(savedCustomSongs);
+              localSongs.forEach(ls => {
+                if (!finalSongs.some(fs => fs.id === ls.id)) {
+                  finalSongs.push(ls);
+                }
+              });
+            } catch (e) {}
+          }
+          
+          setCustomSongs(finalSongs);
+          
+          // Carrega arquivos de áudio binários do IndexedDB de forma assíncrona
+          import('./utils/audioStorage').then(async ({ getSongAudio }) => {
+            const songsWithAudio = await Promise.all(
+              finalSongs.map(async (song) => {
+                const audioFile = await getSongAudio(song.id);
+                if (audioFile) {
+                  return { ...song, audioFile };
+                }
+                return song;
+              })
+            );
+            setCustomSongs(songsWithAudio);
+          }).catch(err => console.error("Falha ao carregar áudios do IndexedDB:", err));
+        }
+      };
+
+      loadSongs();
 
       const savedProfileName = localStorage.getItem('adventist_karaoke_profile_name') || localStorage.getItem('adventist_karaoke_name');
       if (savedProfileName) {
@@ -244,8 +246,8 @@ export default function App() {
     } catch(e){}
   };
 
-  // Salva músicas customizadas no LocalStorage, no Servidor e sincroniza os áudios binários no IndexedDB
-  const handleSaveCustomSongs = (newSongs: Song[]): Promise<{ success: boolean; database?: string; warning?: string }> => {
+  // Salva músicas customizadas no LocalStorage, no Servidor/Supabase e sincroniza os áudios binários no IndexedDB
+  const handleSaveCustomSongs = async (newSongs: Song[]): Promise<{ success: boolean; database?: string; warning?: string }> => {
     // 1. Identifica músicas removidas para deletar seus arquivos de áudio do IndexedDB
     const newSongIds = new Set(newSongs.map(s => s.id));
     const deletedSongs = customSongs.filter(s => !newSongIds.has(s.id));
@@ -273,25 +275,39 @@ export default function App() {
       });
       localStorage.setItem('adventist_karaoke_custom_songs', JSON.stringify(songsToSerialize));
 
-      // Sincroniza com o servidor para que todos tenham acesso!
-      return fetch('/api/custom-songs', {
+      // Se o Supabase estiver configurado diretamente no client-side, faz a gravação direta
+      if (isSupabaseConfiguredClient()) {
+        console.log("Supabase configured on client. Saving directly...");
+        await saveCustomSongsClient(songsToSerialize);
+        return { success: true, database: 'supabase' };
+      }
+
+      // Senão, sincroniza com o servidor Express
+      const res = await fetch('/api/custom-songs', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify(songsToSerialize)
-      })
-      .then(res => res.json())
-      .then((data) => {
+      });
+
+      const contentType = res.headers.get("content-type");
+      if (contentType && contentType.includes("application/json")) {
+        const data = await res.json();
         console.log('Músicas sincronizadas com o servidor com sucesso', data);
         return data;
-      })
-      .catch(err => {
-        console.error('Erro ao salvar no servidor:', err);
-        return { success: false, warning: String(err.message || err) };
-      });
-    } catch(e) {
-      return Promise.resolve({ success: false, warning: String(e) });
+      } else {
+        // Se retornar HTML ou outro conteúdo não JSON (ex: no Vercel)
+        console.warn("Resposta do servidor não foi JSON válido. Assumindo salvamento local.");
+        return { 
+          success: true, 
+          database: 'local', 
+          warning: "O servidor não suporta gravação online (provavelmente hospedado no Vercel estático). Para salvar online, configure suas credenciais do Supabase no Painel do Administrador." 
+        };
+      }
+    } catch(e: any) {
+      console.error('Erro ao salvar no servidor/Supabase:', e);
+      return { success: true, database: 'local', warning: String(e.message || e) };
     }
   };
 
