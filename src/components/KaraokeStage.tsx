@@ -86,7 +86,7 @@ export default function KaraokeStage({ song, onExit, currentUser, onSaveScore }:
   // System Controls
   const [isMicConnected, setIsMicConnected] = useState(false);
   const [micError, setMicError] = useState<string | null>(null);
-  const [isGuideSynthOn, setIsGuideSynthOn] = useState(true);
+  const [isGuideSynthOn, setIsGuideSynthOn] = useState(false);
   const [useSimulatedVoice, setUseSimulatedVoice] = useState(false);
   const [simulatedMidiValue, setSimulatedMidiValue] = useState(64); // E4 default
 
@@ -94,9 +94,9 @@ export default function KaraokeStage({ song, onExit, currentUser, onSaveScore }:
   const [vocalPitchMidi, setVocalPitchMidi] = useState<number>(-1);
   const [vocalVolume, setVocalVolume] = useState<number>(0);
   const pitchCheckIntervalRef = useRef<number>(0);
-  const [pitchFeedbackMessage, setPitchFeedbackMessage] = useState<string>('Ajustando voz...');
+  const [pitchFeedbackMessage, setPitchFeedbackMessage] = useState<string>('Voz ativa...');
   const [pitchFeedbackColor, setPitchFeedbackColor] = useState<string>('text-slate-400');
-  const [viewMode] = useState<'classic' | 'scoring'>('classic');
+  const [viewMode, setViewMode] = useState<'classic' | 'scoring'>('classic');
   const [showMenusDuringPlay, setShowMenusDuringPlay] = useState(false);
 
   // Real-time microphone test state
@@ -135,6 +135,53 @@ export default function KaraokeStage({ song, onExit, currentUser, onSaveScore }:
       stopSynth();
     };
   }, []);
+
+  // Screen Wake Lock API to prevent the screen from turning off while playing
+  useEffect(() => {
+    let wakeLock: any = null;
+
+    async function requestWakeLock() {
+      if ('wakeLock' in navigator) {
+        try {
+          wakeLock = await (navigator as any).wakeLock.request('screen');
+          console.log('Screen Wake Lock is active.');
+        } catch (err: any) {
+          console.warn(`Wake Lock failed: ${err.name}, ${err.message}`);
+        }
+      }
+    }
+
+    async function releaseWakeLock() {
+      if (wakeLock) {
+        try {
+          await wakeLock.release();
+          wakeLock = null;
+          console.log('Screen Wake Lock released.');
+        } catch (e) {
+          console.warn('Error releasing wake lock:', e);
+        }
+      }
+    }
+
+    if (playState === 'playing') {
+      requestWakeLock();
+    } else {
+      releaseWakeLock();
+    }
+
+    const handleVisibilityChange = async () => {
+      if (playState === 'playing' && document.visibilityState === 'visible') {
+        await requestWakeLock();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      releaseWakeLock();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [playState]);
 
   // Keyboard controls listener for sandboxed iframe play tests
   useEffect(() => {
@@ -826,6 +873,50 @@ export default function KaraokeStage({ song, onExit, currentUser, onSaveScore }:
     onExit();
   };
 
+  // Handle high-performance dynamic canvas sizing and screen orientation changes
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const handleResize = () => {
+      const parent = canvas.parentElement;
+      if (!parent) return;
+      const rect = parent.getBoundingClientRect();
+      
+      // Sync internal drawing resolution with display size
+      const targetWidth = Math.floor(rect.width || parent.clientWidth || 800);
+      const targetHeight = Math.floor(rect.height || parent.clientHeight || 280);
+
+      if (canvas.width !== targetWidth || canvas.height !== targetHeight) {
+        canvas.width = targetWidth;
+        canvas.height = targetHeight;
+      }
+    };
+
+    // Initialize dimensions
+    handleResize();
+
+    // Observe parental size changes (extremely precise during mobile rotation)
+    let resizeObserver: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== 'undefined' && canvas.parentElement) {
+      resizeObserver = new ResizeObserver(() => {
+        handleResize();
+      });
+      resizeObserver.observe(canvas.parentElement);
+    }
+
+    window.addEventListener('resize', handleResize);
+    window.addEventListener('orientationchange', handleResize);
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('orientationchange', handleResize);
+      if (resizeObserver) {
+        resizeObserver.disconnect();
+      }
+    };
+  }, [playState, viewMode]);
+
   // Canvas rolling timeline renderer (runs at 60 FPS)
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -1044,7 +1135,7 @@ export default function KaraokeStage({ song, onExit, currentUser, onSaveScore }:
       {/* Top Controls Header Bar */}
       <div 
         onClick={(e) => e.stopPropagation()}
-        className={`p-4 bg-white/[0.02] border-b border-white/5 flex items-center justify-between z-10 relative transition-all duration-300 ${
+        className={`p-4 landscape:py-1.5 landscape:px-3 bg-white/[0.02] border-b border-white/5 flex items-center justify-between z-10 relative transition-all duration-300 ${
           playState === 'playing' && !showMenusDuringPlay ? 'opacity-0 h-0 p-0 overflow-hidden border-none pointer-events-none' : 'opacity-100'
         }`}
       >
@@ -1067,25 +1158,15 @@ export default function KaraokeStage({ song, onExit, currentUser, onSaveScore }:
           </div>
         </div>
 
-        {/* Absolute Centered Singer Badge */}
-        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none hidden sm:flex items-center justify-center">
-          <div className="flex items-center gap-1.5 px-3 py-1 bg-amber-500/10 border border-amber-500/20 rounded-full animate-pulse">
-            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping" />
-            <span className="text-xs font-bold uppercase tracking-widest text-amber-400 font-display">
-              Cantando: {currentUser || 'Você'}
-            </span>
-          </div>
-        </div>
-
         <div className="flex items-center gap-3">
           {/* Projector / Second Screen Button */}
           <button
             onClick={openProjectorWindow}
-            className="p-2 bg-slate-950/40 rounded-xl border border-white/10 hover:border-amber-400/40 hover:bg-slate-950 text-slate-300 hover:text-white transition-colors cursor-pointer flex items-center justify-center gap-1.5 px-3"
+            className="group p-2 bg-slate-950/40 rounded-xl border border-white/10 hover:border-amber-400/40 hover:bg-slate-950 text-slate-300 hover:text-white transition-colors cursor-pointer flex items-center justify-center gap-1.5 px-3"
             title="Abrir em Outra Tela / Projetor"
           >
-            <Tv className="h-4 w-4 text-amber-400" />
-            <span className="text-[10px] font-bold uppercase tracking-wider hidden sm:inline text-slate-200">Segunda Tela</span>
+            <Tv className="h-4 w-4 text-amber-400 shrink-0" />
+            <span className="text-[10px] font-bold uppercase tracking-wider hidden md:group-hover:inline text-slate-200">Segunda Tela</span>
           </button>
 
           {/* Fullscreen Button */}
@@ -1107,25 +1188,25 @@ export default function KaraokeStage({ song, onExit, currentUser, onSaveScore }:
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="text-center w-full max-w-xl max-h-full overflow-y-auto p-4 sm:p-6 glass-panel rounded-2xl shadow-2xl space-y-4 sm:space-y-5 scrollbar-thin"
+            className="text-center w-full max-w-md max-h-full overflow-y-auto p-3 sm:p-5 glass-panel rounded-2xl shadow-2xl space-y-3 sm:space-y-4 scrollbar-none flex flex-col justify-center"
           >
-            <div className="mx-auto h-12 w-12 sm:h-16 sm:w-16 bg-amber-500/10 text-amber-500 rounded-full flex items-center justify-center border border-amber-500/20 shadow-lg shadow-amber-950/30 animate-pulse shrink-0">
-              <Mic className="h-6 w-6 sm:h-8 sm:w-8" />
+            <div className="mx-auto h-9 w-9 sm:h-12 sm:w-12 bg-amber-500/10 text-amber-500 rounded-full flex items-center justify-center border border-amber-500/20 shadow-md shadow-amber-950/30 animate-pulse shrink-0 hidden xs:flex">
+              <Mic className="h-5 w-5 sm:h-6 sm:w-6" />
             </div>
 
-            <div className="space-y-1 sm:space-y-2">
-              <h4 className="text-lg sm:text-xl font-display font-extrabold text-white">Preparar Microfone</h4>
-              <p className="text-[11px] sm:text-xs text-slate-300 leading-relaxed serif-font italic">
-                Recomendamos conectar fones de ouvido para o aplicativo capturar unicamente a sua voz e não as notas de acompanhamento do teclado vocal.
+            <div className="space-y-0.5 sm:space-y-1">
+              <h4 className="text-base sm:text-lg font-display font-extrabold text-white">Preparar Microfone</h4>
+              <p className="text-[10px] sm:text-xs text-slate-400 leading-relaxed serif-font italic hidden xs:block">
+                Recomendamos fones de ouvido para capturar unicamente a sua voz.
               </p>
             </div>
 
             {/* LIVE MICROPHONE TEST PANEL */}
-            <div className="bg-slate-900/80 p-4 rounded-xl border border-white/5 space-y-3 text-left">
+            <div className="bg-slate-900/60 p-2.5 sm:p-3.5 rounded-xl border border-white/5 space-y-2 sm:space-y-3 text-left">
               <div className="flex items-center justify-between">
                 <span className="text-[10px] uppercase font-black tracking-widest text-slate-400 flex items-center gap-1.5 font-display">
-                  <Mic className="h-4 w-4 text-emerald-400" />
-                  Teste de Microfone em Tempo Real
+                  <Mic className="h-3.5 w-3.5 text-emerald-400" />
+                  Teste de Volume
                 </span>
                 
                 <button
@@ -1137,125 +1218,39 @@ export default function KaraokeStage({ song, onExit, currentUser, onSaveScore }:
                       stopVoiceCapture();
                     }
                   }}
-                  className={`px-3 py-1 text-[10px] font-black uppercase rounded-lg border transition-all cursor-pointer ${
+                  className={`px-2.5 py-1 text-[9px] font-black uppercase rounded-lg border transition-all cursor-pointer ${
                     isTestingMic
                       ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/25 shadow-sm'
                       : 'bg-slate-950/60 border-white/10 text-slate-300 hover:text-white hover:bg-slate-900 hover:border-white/20'
                   }`}
                 >
-                  {isTestingMic ? '⏹ Parar Teste' : '🎙 Testar Microfone'}
+                  {isTestingMic ? '⏹ Parar' : '🎙 Testar'}
                 </button>
               </div>
 
               {isTestingMic && (
-                <div className="space-y-3 animate-fade-in bg-slate-950/40 p-3 rounded-lg border border-white/5">
-                  {/* Volume level indicator bar */}
-                  <div className="space-y-1">
-                    <div className="flex justify-between text-[10px] font-mono text-slate-400">
-                      <span>Volume de Entrada:</span>
+                <div className="space-y-1.5 animate-fade-in bg-slate-950/40 p-2 rounded-lg border border-white/5">
+                  <div className="space-y-0.5">
+                    <div className="flex justify-between text-[9px] font-mono text-slate-400">
+                      <span>Nível de Entrada:</span>
                       <span className="font-bold text-slate-200">{testVolume}%</span>
                     </div>
-                    <div className="h-2.5 bg-slate-900 rounded-full overflow-hidden border border-white/5 flex gap-0.5 p-0.5">
+                    <div className="h-2 bg-slate-900 rounded-full overflow-hidden border border-white/5 flex gap-0.5 p-0.5">
                       <div
                         className="h-full rounded-full transition-all duration-75 bg-gradient-to-r from-emerald-500 via-amber-400 to-red-500"
                         style={{ width: `${testVolume}%` }}
                       />
                     </div>
                   </div>
-
-                  {/* Volume quality advice label */}
-                  <div className="text-[10px] leading-none text-slate-400 flex items-center justify-between font-mono">
-                    <span>Mapeamento:</span>
-                    {testVolume === 0 ? (
-                      <span className="text-slate-500">Silêncio total 🔇</span>
-                    ) : testVolume < 3 ? (
-                      <span className="text-slate-400 font-medium">Muito baixo (sussurro ou desligado) 😴</span>
-                    ) : testVolume < 50 ? (
-                      <span className="text-emerald-400 font-bold">Excelente captação! Pronto para cantar ✨</span>
-                    ) : (
-                      <span className="text-amber-500 font-bold">Sinal muito forte (afaste o microfone) ⚠️</span>
-                    )}
-                  </div>
-
-                  {/* Pitch and frequency live recognition row */}
-                  <div className="pt-2.5 border-t border-white/5 flex items-center justify-between">
-                    <div>
-                      <span className="text-[9px] uppercase font-bold text-slate-500 block">Frequência</span>
-                      <span className="text-xs font-mono font-bold text-slate-200">
-                        {testFrequency > 0 ? `${testFrequency} Hz` : '--- Hz'}
-                      </span>
-                    </div>
-                    
-                    <div className="text-right">
-                      <span className="text-[9px] uppercase font-bold text-slate-500 block">Nota Identificada</span>
-                      <span className="text-xs font-mono font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
-                        {testPitchMidi > 50 ? testPitchName : '---'}
-                      </span>
-                    </div>
-                  </div>
-                  
-                  {testPitchMidi > 50 ? (
-                    <p className="text-[10px] text-center text-emerald-400 font-medium bg-emerald-500/5 py-1 rounded">
-                      ✓ Voz identificada com sucesso! A pontuação funcionará perfeitamente.
-                    </p>
-                  ) : (
-                    <p className="text-[10px] text-center text-slate-500 font-medium bg-slate-900/40 py-1 rounded">
-                      Fale ou cante no microfone para calibrarmos o tom agora mesmo.
-                    </p>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* Playback Audio File Input for Custom/Saved Songs */}
-            <div className="bg-slate-900/60 p-4 rounded-xl border border-dashed border-white/10 space-y-2.5 text-left">
-              <span className="text-[10px] uppercase font-black tracking-widest text-slate-400 block mb-1 flex items-center gap-1.5">
-                <FileAudio className="h-4 w-4 text-amber-400" />
-                Áudio de Acompanhamento (Playback / MP3)
-              </span>
-              
-              {stageAudioFile ? (
-                <div className="flex items-center justify-between text-xs bg-slate-950/40 p-2 rounded border border-white/5">
-                  <span className="font-mono text-amber-400 truncate max-w-[200px]" title={stageAudioFile.name}>
-                    {stageAudioFile.name}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setStageAudioFile(null);
-                      setStageAudioUrl(null);
-                    }}
-                    className="text-[10px] text-red-500 hover:text-red-400 font-bold uppercase underline"
-                  >
-                    Remover
-                  </button>
-                </div>
-              ) : (
-                <div>
-                  <label className="flex flex-col items-center justify-center py-4 border border-dashed border-white/10 hover:border-amber-500/30 rounded-xl cursor-pointer bg-slate-950/40 hover:bg-slate-950 transition-all text-center">
-                    <FileAudio className="h-6 w-6 text-slate-500 group-hover:text-amber-500" />
-                    <span className="text-[11px] font-bold text-slate-400 mt-1.5 block">Selecionar Playback (.mp3)</span>
-                    <span className="text-[9px] text-slate-600 mt-0.5">Opcional • Cante com áudio real de fundo!</span>
-                    <input
-                      type="file"
-                      accept="audio/*"
-                      onChange={(e) => {
-                        if (e.target.files && e.target.files[0]) {
-                          setStageAudioFile(e.target.files[0]);
-                        }
-                      }}
-                      className="hidden"
-                    />
-                  </label>
                 </div>
               )}
             </div>
 
             <button
               onClick={handleStartKaraoke}
-              className="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-500 text-slate-950 font-black py-3 sm:py-4 px-6 rounded-xl transition-all active:scale-[0.98] shadow-lg shadow-amber-500/15 flex items-center justify-center gap-2 cursor-pointer text-xs uppercase tracking-widest shrink-0"
+              className="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-500 text-slate-950 font-black py-2.5 sm:py-3 px-4 rounded-xl transition-all active:scale-[0.98] shadow-md shadow-amber-500/10 flex items-center justify-center gap-1.5 cursor-pointer text-xs uppercase tracking-wider shrink-0"
             >
-              <Play className="h-4 w-4 fill-current" />
+              <Play className="h-3.5 w-3.5 fill-current" />
               INICIAR LOUVOR
             </button>
           </motion.div>
@@ -1303,7 +1298,7 @@ export default function KaraokeStage({ song, onExit, currentUser, onSaveScore }:
 
         {/* PlayState == PLAYING show canvas timeline, feedback and scrolling elements */}
         {playState === 'playing' && (
-          <div className="w-full h-full flex flex-col justify-between items-stretch">
+          <div className="w-full flex-1 min-h-0 flex flex-col justify-between items-stretch">
             
             {/* Visualizer canvas frame container / Classic screen */}
             {viewMode === 'scoring' ? (
@@ -1379,7 +1374,7 @@ export default function KaraokeStage({ song, onExit, currentUser, onSaveScore }:
               </div>
             ) : (
               /* GORGEOUS CINEMATIC CLASSIC TRANSPARENT THEATRE VIEW */
-              <div className="relative flex-1 w-full h-full rounded-2xl overflow-hidden border border-white/10 bg-slate-950/90 flex flex-col justify-center items-center p-6 sm:p-8 shadow-2xl">
+              <div className="relative flex-1 min-h-0 w-full rounded-2xl overflow-hidden border border-white/10 bg-slate-950/90 flex flex-col justify-center items-center p-3 sm:p-6 landscape:p-2.5 shadow-2xl">
                 
                 {/* Flowing animated background elements */}
                 <div className="absolute inset-0 bg-gradient-to-b from-indigo-950/20 via-slate-950/95 to-amber-950/10 pointer-events-none" />
@@ -1387,20 +1382,20 @@ export default function KaraokeStage({ song, onExit, currentUser, onSaveScore }:
                 <div className="absolute -right-20 -bottom-20 w-80 h-80 bg-indigo-500/5 rounded-full blur-3xl animate-pulse" />
 
                 {/* High contrast center lyric column */}
-                <div className="flex-1 flex flex-col justify-center items-center py-4 sm:py-6 text-center space-y-4 sm:space-y-6 lg:space-y-8 z-10 animate-fade-in w-full">
+                <div className="flex-1 min-h-0 flex flex-col justify-center items-center py-2 sm:py-4 landscape:py-0.5 text-center space-y-3 sm:space-y-6 lg:space-y-8 landscape:space-y-1.5 z-10 animate-fade-in w-full">
                   {/* PREVIOUS LYRIC (Very small & translucent) */}
-                  <div className="h-8 flex items-center justify-center">
+                  <div className="h-6 landscape:h-0 flex items-center justify-center landscape:hidden">
                     {previousLyric ? (
-                      <p className="text-sm sm:text-lg text-slate-500 serif-font italic line-through opacity-30 truncate transition-all max-w-2xl px-4">
+                      <p className="text-xs sm:text-lg text-slate-500 serif-font italic line-through opacity-30 truncate transition-all max-w-2xl px-4">
                         {previousLyric.text}
                       </p>
                     ) : null}
                   </div>
 
                   {/* GIANT FOCUS ACTIVE LYRIC */}
-                  <div className="flex-1 flex items-center justify-center w-full px-4 font-display">
+                  <div className="flex-1 min-h-0 flex items-center justify-center w-full px-3 font-display">
                     {activeLyric ? (
-                      <div className="flex flex-wrap justify-center items-center gap-x-4 gap-y-2 sm:gap-y-4 px-2 sm:px-6 w-full text-center max-w-3xl mx-auto py-1">
+                      <div className="flex flex-wrap justify-center items-center gap-x-3 sm:gap-x-4 gap-y-1.5 sm:gap-y-4 landscape:gap-y-1 px-1 sm:px-6 w-full text-center max-w-3xl mx-auto py-0.5">
                         {getLinkedWords().map((word, wIdx) => {
                           // Color word-by-word once songTime reaches the start time of this word
                           const wordProgress = songTime >= word.startTime ? 100 : 0;
@@ -1412,13 +1407,13 @@ export default function KaraokeStage({ song, onExit, currentUser, onSaveScore }:
                               className="relative inline-block select-none"
                             >
                               {/* Base dim word */}
-                              <span className="text-3xl sm:text-5xl lg:text-6xl font-black text-white/20 tracking-tight serif-font italic transition-colors duration-150">
+                              <span className="text-xl sm:text-5xl lg:text-6xl landscape:text-xl font-black text-white/20 tracking-tight serif-font italic transition-colors duration-150">
                                 {word.text}
                               </span>
                               
                               {/* Glowing progressive word overlay */}
                               <span
-                                className="absolute inset-0 text-center text-3xl sm:text-5xl lg:text-6xl font-black text-amber-400 tracking-tight serif-font italic pointer-events-none transition-all duration-75 block whitespace-nowrap"
+                                className="absolute inset-0 text-center text-xl sm:text-5xl lg:text-6xl landscape:text-xl font-black text-amber-400 tracking-tight serif-font italic pointer-events-none transition-all duration-75 block whitespace-nowrap"
                                 style={{
                                   clipPath: `inset(0 ${100 - wordProgress}% 0 0)`,
                                   WebkitClipPath: `inset(0 ${100 - wordProgress}% 0 0)`,
@@ -1432,14 +1427,14 @@ export default function KaraokeStage({ song, onExit, currentUser, onSaveScore }:
                         })}
                       </div>
                     ) : songTime < (song.lyrics[0]?.time || 5) ? (
-                      <div className="flex flex-col items-center justify-center text-center space-y-4 animate-fade-in py-6">
+                      <div className="flex flex-col items-center justify-center text-center space-y-4 landscape:space-y-1.5 animate-fade-in py-6 landscape:py-1">
                         <span className="text-xs font-bold text-amber-500 uppercase tracking-widest bg-amber-500/10 px-3.5 py-1.5 rounded-full border border-amber-500/20">
                           A Seguir
                         </span>
-                        <h1 className="text-4xl sm:text-6xl font-display font-black text-amber-400 tracking-tight uppercase drop-shadow-[0_0_20px_rgba(245,158,11,0.3)]">
+                        <h1 className="text-4xl sm:text-6xl landscape:text-3xl font-display font-black text-amber-400 tracking-tight uppercase drop-shadow-[0_0_20px_rgba(245,158,11,0.3)]">
                           {song.title}
                         </h1>
-                        <p className="text-lg sm:text-2xl text-slate-300 font-semibold tracking-wider italic">
+                        <p className="text-lg sm:text-2xl landscape:text-base text-slate-300 font-semibold tracking-wider italic">
                           {song.artist}
                         </p>
                         {song.numberOrYear && (
@@ -1470,9 +1465,9 @@ export default function KaraokeStage({ song, onExit, currentUser, onSaveScore }:
                   </div>
 
                   {/* UPCOMING LYRIC (Slightly dim, ready to be sung) */}
-                  <div className="h-10 flex items-center justify-center">
+                  <div className="h-10 landscape:h-6 flex items-center justify-center">
                     {upcomingLyric ? (
-                      <p className="text-sm sm:text-xl text-amber-100/70 font-semibold italic serif-font tracking-wide animate-pulse bg-white/5 border border-white/10 px-5 py-1 rounded-full">
+                      <p className="text-sm sm:text-lg landscape:text-xs text-amber-100/70 font-semibold italic serif-font tracking-wide animate-pulse bg-white/5 border border-white/10 px-5 py-1 landscape:px-3 landscape:py-0.5 rounded-full">
                         {upcomingLyric.text}
                       </p>
                     ) : null}
@@ -1663,44 +1658,17 @@ export default function KaraokeStage({ song, onExit, currentUser, onSaveScore }:
               <div className="space-y-1 text-center">
                 <h3 className="text-2xl font-display font-extrabold text-white uppercase tracking-tight">Louvor Concluído!</h3>
                 <p className="text-xs text-amber-400 font-bold uppercase tracking-wider">Excelente louvor, {currentUser || 'Você'}!</p>
-                <p className="text-xs text-slate-300 serif-font italic">"Bom é cantar louvores ao nosso Deus..." Aqui estão as suas estatísticas:</p>
-              </div>
-
-              {/* Performance scores report matrix */}
-              <div className="grid grid-cols-3 gap-3 bg-slate-950/60 p-4 rounded-xl border border-white/5 text-center">
-                <div>
-                  <span className="text-[9px] uppercase font-bold text-slate-400 block mb-1">Pontos</span>
-                  <span className="text-lg font-mono font-black text-amber-400">{score}</span>
-                </div>
-                <div>
-                  <span className="text-[9px] uppercase font-bold text-slate-400 block mb-1">Precisão</span>
-                  <span className="text-lg font-mono font-black text-emerald-400">
-                    {finalAccuracy}%
-                  </span>
-                </div>
-                <div>
-                  <span className="text-[9px] uppercase font-bold text-slate-400 block mb-1">Combo Máximo</span>
-                  <span className="text-lg font-mono font-black text-amber-500">{maxStreak}</span>
-                </div>
+                <p className="text-xs text-slate-300 serif-font italic">"Bom é cantar louvores ao nosso Deus..." Obrigado por entoar este lindo louvor.</p>
               </div>
 
               {/* Display Stars gained */}
               <div className="flex gap-2 justify-center py-2 text-2xl">
-                {Array.from({ length: 5 }).map((_, i) => {
-                  let active = false;
-                  if (i === 0) active = finalAccuracy >= 0;
-                  else if (i === 1) active = finalAccuracy >= 20;
-                  else if (i === 2) active = finalAccuracy >= 40;
-                  else if (i === 3) active = finalAccuracy >= 60;
-                  else if (i === 4) active = finalAccuracy >= 80;
-
-                  return (
-                    <Star
-                      key={i}
-                      className={`h-6 w-6 ${active ? 'fill-amber-500 text-amber-500' : 'text-slate-800'}`}
-                    />
-                  );
-                })}
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <Star
+                    key={i}
+                    className="h-6 w-6 fill-amber-500 text-amber-500"
+                  />
+                ))}
               </div>
 
               <div className="flex flex-col gap-2">
@@ -1733,50 +1701,31 @@ export default function KaraokeStage({ song, onExit, currentUser, onSaveScore }:
         
         {/* Toggle Guide synth and toggle mic simulation */}
         <div className="flex items-center gap-4">
-          <button
-            onClick={() => setIsGuideSynthOn(!isGuideSynthOn)}
-            className="flex items-center gap-1.5 hover:text-white px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-800/80 cursor-pointer"
-            title="Sintetizador guia de teclado de notas douradas"
-          >
-            {isGuideSynthOn ? (
-              <>
-                <Volume2 className="h-3.5 w-3.5 text-amber-400 animate-pulse" />
-                <span className="text-[10px] font-bold">Guia de Notas Ativo</span>
-              </>
-            ) : (
-              <>
-                <VolumeX className="h-3.5 w-3.5 text-slate-500" />
-                <span className="text-[10px] text-slate-500 font-bold">Guia de Notas Mudo</span>
-              </>
-            )}
-          </button>
-
-          <button
-            onClick={() => setUseSimulatedVoice(!useSimulatedVoice)}
-            className="flex items-center gap-1.5 hover:text-white px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-800/80 cursor-pointer"
-          >
-            <Keyboard className="h-3.5 w-3.5 text-indigo-400" />
-            <span className="text-[10px] font-bold">
-              {useSimulatedVoice ? 'Remover Teclado de Voz' : 'Simular Teclado de Voz'}
+          <div className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/10 border border-amber-500/20 rounded-full animate-pulse">
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping" />
+            <span className="text-[10px] font-black uppercase tracking-widest text-amber-400 font-display">
+              Cantando: {currentUser || 'Você'}
             </span>
-          </button>
+          </div>
         </div>
 
         {/* Mic status lights */}
         <div className="flex items-center gap-2">
-          {useSimulatedVoice ? (
-            <span className="flex items-center gap-1.5 text-indigo-400 bg-indigo-500/10 px-2.5 py-1 rounded-full border border-indigo-500/20 text-[10px] font-extrabold uppercase">
-              ● MODO SIMULADOR ATIVO
-            </span>
-          ) : isMicConnected ? (
-            <span className="flex items-center gap-1.5 text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/20 text-[10px] font-extrabold uppercase">
-              <Mic className="h-3 w-3 animate-ping" />
-              ● MICROFONE CONECTADO
+          {isMicConnected ? (
+            <span 
+              className="group flex items-center gap-1.5 text-emerald-400 bg-emerald-500/10 p-2 md:px-2.5 md:py-1 rounded-full border border-emerald-500/20 text-[10px] font-extrabold uppercase transition-all duration-200"
+              title="Microfone Ativo"
+            >
+              <Mic className="h-4 w-4 md:h-3 md:w-3 animate-ping shrink-0" />
+              <span className="hidden md:group-hover:inline text-[10px] whitespace-nowrap">Microfone Ativo</span>
             </span>
           ) : (
-            <span className="flex items-center gap-1.5 text-rose-400 bg-rose-500/10 px-2.5 py-1 rounded-full border border-rose-500/20 text-[10px] font-extrabold uppercase">
-              <MicOff className="h-3 w-3" />
-              ● MICROFONE OFF
+            <span 
+              className="group flex items-center gap-1.5 text-rose-400 bg-rose-500/10 p-2 md:px-2.5 md:py-1 rounded-full border border-rose-500/20 text-[10px] font-extrabold uppercase transition-all duration-200"
+              title="Microfone Desconectado"
+            >
+              <MicOff className="h-4 w-4 md:h-3 md:w-3 shrink-0" />
+              <span className="hidden md:group-hover:inline text-[10px] whitespace-nowrap">Microfone Off</span>
             </span>
           )}
         </div>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Song, ScoreRecord, FriendCompetitor } from './types';
 import { ADVENTIST_SONGS, DEFAULT_LEADERBOARD, SYSTEM_COMPETITORS } from './songsData';
 import SongSelector from './components/SongSelector';
@@ -10,6 +10,25 @@ import { Mic, Trophy, Music, User, Flame, Disc, Shield, Settings2, Edit3, Check,
 import { motion, AnimatePresence } from 'motion/react';
 import { AppLanguage, translations } from './utils/translations';
 import { isSupabaseConfiguredClient, fetchCustomSongsClient, saveCustomSongsClient } from './utils/supabaseClient';
+
+// Helper to decode JWT from Google Sign-In on client-side safely without heavy packages
+const decodeJwt = (token: string) => {
+  try {
+    const base64Url = token.split('.')[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(
+      window
+        .atob(base64)
+        .split('')
+        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join('')
+    );
+    return JSON.parse(jsonPayload);
+  } catch (e) {
+    console.error("Failed to decode JWT:", e);
+    return null;
+  }
+};
 
 export default function App() {
   const isProjector = typeof window !== 'undefined' && window.location.search.includes('projector=true');
@@ -75,6 +94,31 @@ export default function App() {
   const [editedName, setEditedName] = useState('Você (Cantor)');
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [isSingerDropdownOpen, setIsSingerDropdownOpen] = useState(false);
+  const singerDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Google Login related states
+  const [isGoogleLoggedIn, setIsGoogleLoggedIn] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('adventist_google_logged_in') === 'true';
+    } catch (e) {
+      return false;
+    }
+  });
+  const [showMockGoogleLogin, setShowMockGoogleLogin] = useState(false);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent | TouchEvent) {
+      if (singerDropdownRef.current && !singerDropdownRef.current.contains(event.target as Node)) {
+        setIsSingerDropdownOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
+  }, []);
 
   // Dynamic highscore map per song ID
   const [highscores, setHighscores] = useState<{ [songId: string]: { score: number; accuracy: number; stars: number } }>({});
@@ -404,6 +448,147 @@ export default function App() {
     setIsEditingProfile(false);
   };
 
+  const handleGoogleLoginSuccess = (payload: any) => {
+    if (!payload) return;
+    const { name, picture, email } = payload;
+    const cleanedName = name?.trim() || 'Usuário Google';
+    const oldProfileName = profileName;
+
+    setProfileName(cleanedName);
+    setEditedName(cleanedName);
+    if (picture) {
+      setUserAvatar(picture);
+    }
+    setLoginEmail(email || null);
+    setIsGoogleLoggedIn(true);
+
+    try {
+      localStorage.setItem('adventist_google_logged_in', 'true');
+      localStorage.setItem('adventist_karaoke_profile_name', cleanedName);
+      localStorage.setItem('adventist_karaoke_active_singer', cleanedName);
+      if (picture) {
+        localStorage.setItem('adventist_karaoke_avatar', picture);
+      }
+      if (email) {
+        localStorage.setItem('adventist_karaoke_email', email);
+      }
+    } catch (e) {}
+
+    // If currently selected active singer was the old profile name, update it
+    if (userName === oldProfileName || userName === 'Você (Cantor)') {
+      setUserName(cleanedName);
+    }
+
+    // Update active competitor inside competitors state
+    const updatedCompetitors = competitors.map(c => {
+      if (c.name === oldProfileName) {
+        return { ...c, name: cleanedName, avatar: picture || userAvatar };
+      }
+      return c;
+    });
+    setCompetitors(updatedCompetitors);
+    try {
+      localStorage.setItem('adventist_karaoke_competitors', JSON.stringify(updatedCompetitors));
+    } catch (e) {}
+
+    // Update historical references
+    const updatedHistory = scoreHistory.map((rec) => {
+      if (rec.userName === oldProfileName || rec.userName === 'Você (Cantor)' || rec.userName === 'Cantor Convidado') {
+        return { ...rec, userName: cleanedName };
+      }
+      return rec;
+    });
+    setScoreHistory(updatedHistory);
+    try {
+      localStorage.setItem('adventist_karaoke_history', JSON.stringify(updatedHistory));
+    } catch (e) {}
+
+    setIsEditingProfile(false);
+  };
+
+  const handleGoogleLogout = () => {
+    setIsGoogleLoggedIn(false);
+    const defaultName = 'Você (Cantor)';
+    const oldProfileName = profileName;
+
+    setProfileName(defaultName);
+    setUserName(defaultName);
+    setEditedName(defaultName);
+    setUserAvatar('🎤');
+    setLoginEmail(null);
+
+    try {
+      localStorage.removeItem('adventist_google_logged_in');
+      localStorage.setItem('adventist_karaoke_profile_name', defaultName);
+      localStorage.setItem('adventist_karaoke_active_singer', defaultName);
+      localStorage.setItem('adventist_karaoke_avatar', '🎤');
+      localStorage.removeItem('adventist_karaoke_email');
+    } catch (e) {}
+
+    // Update historical references back to default
+    const updatedHistory = scoreHistory.map((rec) => {
+      if (rec.userName === oldProfileName) {
+        return { ...rec, userName: defaultName };
+      }
+      return rec;
+    });
+    setScoreHistory(updatedHistory);
+    try {
+      localStorage.setItem('adventist_karaoke_history', JSON.stringify(updatedHistory));
+    } catch (e) {}
+
+    setIsEditingProfile(false);
+  };
+
+  // Initialize Google Identity Services if client ID is provided and modal is active
+  useEffect(() => {
+    if (!isEditingProfile) return;
+
+    let initInterval: number;
+    let attempts = 0;
+
+    const initGsi = () => {
+      const client_id = (import.meta as any).env.VITE_GOOGLE_CLIENT_ID || '';
+      if (!client_id) return;
+
+      const googleObj = (window as any).google;
+      if (googleObj?.accounts?.id) {
+        clearInterval(initInterval);
+        try {
+          googleObj.accounts.id.initialize({
+            client_id: client_id,
+            callback: (response: any) => {
+              const payload = decodeJwt(response.credential);
+              if (payload) {
+                handleGoogleLoginSuccess(payload);
+              }
+            }
+          });
+
+          const btnEl = document.getElementById('google-signin-btn');
+          if (btnEl) {
+            googleObj.accounts.id.renderButton(btnEl, {
+              theme: 'outline',
+              size: 'large',
+              shape: 'pill',
+              width: 280,
+            });
+          }
+        } catch (err) {
+          console.error("GSI initialization failed:", err);
+        }
+      } else {
+        attempts++;
+        if (attempts > 30) {
+          clearInterval(initInterval);
+        }
+      }
+    };
+
+    initInterval = window.setInterval(initGsi, 200);
+    return () => clearInterval(initInterval);
+  }, [isEditingProfile]);
+
   // Triggered when user successfully finishes a song on KaraokeStage
   const handleSaveNewScore = (newRecord: ScoreRecord) => {
     const updatedHistory = [newRecord, ...scoreHistory];
@@ -496,7 +681,7 @@ export default function App() {
 
   if (view === 'singing' && selectedSong) {
     return (
-      <div className="h-screen w-screen bg-[#05070a] font-sans text-slate-100 overflow-hidden relative flex flex-col p-2 sm:p-4 selection:bg-amber-500 selection:text-slate-950">
+      <div className="h-[100dvh] w-[100dvw] bg-[#05070a] font-sans text-slate-100 overflow-hidden relative flex flex-col p-2 sm:p-4 selection:bg-amber-500 selection:text-slate-950">
         {/* Immersive Theme Atmosphere Background */}
         <div className="atmosphere" style={{ opacity: 0.15 }} />
         <div className="flex-1 w-full h-full relative z-10 flex flex-col min-h-0">
@@ -515,12 +700,13 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-[#05070a] font-sans text-slate-100 overflow-x-hidden relative selection:bg-indigo-500 selection:text-white">
+    <div className="min-h-[100dvh] bg-[#05070a] font-sans text-slate-100 overflow-x-hidden relative selection:bg-indigo-500 selection:text-white">
       {/* Immersive Theme Atmosphere Background */}
       <div className="atmosphere" />
 
       {/* Elegant Header Navbar */}
-      <header className="border-b border-white/5 bg-slate-950/40 backdrop-blur-xl sticky top-0 z-50">
+      {view !== 'singing' && (
+        <header className="border-b border-white/5 bg-slate-950/40 backdrop-blur-xl sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 py-4.5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           
           {/* Logo Brand Brand */}
@@ -568,7 +754,7 @@ export default function App() {
 
 
             {/* Editable Profile Name Badge / Singer Selector */}
-            <div className="glass-panel px-3 py-1.5 rounded-xl flex items-center gap-2.5 shadow-md border border-white/5 relative">
+            <div className={`glass-panel px-3 py-1.5 rounded-xl flex items-center gap-2.5 shadow-md border border-white/5 relative ${isSingerDropdownOpen ? 'z-50' : 'z-20'}`}>
               {/* Active Singer's Avatar */}
               <div className="h-7 w-7 rounded-full bg-slate-800 border border-white/10 flex items-center justify-center text-sm shrink-0 overflow-hidden shadow-inner">
                 {(() => {
@@ -582,7 +768,7 @@ export default function App() {
               </div>
               
               {/* Selector dropdown */}
-              <div className="flex flex-col text-left relative">
+              <div ref={singerDropdownRef} className="flex flex-col text-left relative">
                 <span className="text-[8px] text-amber-500 uppercase tracking-wider font-extrabold leading-none mb-0.5">
                   {t.activeSinger}
                 </span>
@@ -599,19 +785,13 @@ export default function App() {
                 <AnimatePresence>
                   {isSingerDropdownOpen && (
                     <>
-                      {/* Transparent click-outside overlay */}
-                      <div 
-                        className="fixed inset-0 z-40 cursor-default" 
-                        onClick={() => setIsSingerDropdownOpen(false)} 
-                      />
-                      
                       {/* Beautiful custom dropdown list */}
                       <motion.div
                         initial={{ opacity: 0, y: 8, scale: 0.95 }}
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: 8, scale: 0.95 }}
                         transition={{ duration: 0.12 }}
-                        className="absolute left-0 mt-6 top-full min-w-[170px] bg-slate-900 border border-white/10 rounded-xl shadow-2xl p-1 z-50 overflow-hidden backdrop-blur-xl max-h-60 overflow-y-auto scrollbar-none text-left"
+                        className="absolute right-0 mt-2 top-full min-w-[170px] bg-slate-900 border border-white/10 rounded-xl shadow-2xl p-1 z-50 overflow-hidden backdrop-blur-xl max-h-60 overflow-y-auto scrollbar-none text-left"
                       >
                         {/* Option: Primary Singer */}
                         <button
@@ -741,10 +921,11 @@ export default function App() {
           </div>
 
         </div>
-      </header>
+        </header>
+      )}
 
       {/* Main Core Scope container screen */}
-      <main className="max-w-7xl mx-auto px-4 py-8">
+      <main className={view === 'singing' ? "w-full h-[100dvh] flex flex-col p-0 m-0" : "max-w-7xl mx-auto px-4 py-8"}>
         {view === 'home' && (
           <SongSelector
             songs={[...ADVENTIST_SONGS, ...customSongs]}
@@ -799,7 +980,8 @@ export default function App() {
       </main>
 
       {/* Bottom informational footings */}
-      <footer className="border-t border-slate-900/60 bg-slate-950 mt-16 py-8">
+      {view !== 'singing' && (
+        <footer className="border-t border-slate-900/60 bg-slate-950 mt-16 py-8">
         <div className="max-w-7xl mx-auto px-4 flex flex-col md:flex-row md:items-center md:justify-between gap-4 text-center md:text-left">
           <div>
             <p className="text-xs text-slate-500 font-semibold uppercase tracking-wider">
@@ -823,6 +1005,7 @@ export default function App() {
           </div>
         </div>
       </footer>
+      )}
 
       {/* Scroll to top button for mobile / smaller screens */}
       <AnimatePresence>
@@ -847,6 +1030,97 @@ export default function App() {
             <h3 className="font-display font-bold text-base sm:text-lg text-white mb-3">
               {appLanguage === 'pt' ? 'Configurar Perfil de Cantor' : appLanguage === 'en' ? 'Configure Singer Profile' : 'Configurar Perfil de Cantor'}
             </h3>
+
+            {/* Google Authentication Integration */}
+            {isGoogleLoggedIn ? (
+              <div className="mb-4 bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-3 flex items-center justify-between gap-3 animate-fadeIn">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="h-8 w-8 rounded-full border border-emerald-400/30 overflow-hidden shrink-0 shadow-sm">
+                    {userAvatar.startsWith('data:') || userAvatar.startsWith('http') ? (
+                      <img src={userAvatar} alt={profileName} className="h-full w-full object-cover" />
+                    ) : (
+                      <span className="text-base flex items-center justify-center h-full w-full bg-slate-800">{userAvatar}</span>
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-bold text-white truncate">{profileName}</p>
+                    <p className="text-[10px] text-emerald-400 font-semibold flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                      Google Conectado
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleGoogleLogout}
+                  className="px-2.5 py-1 text-[10px] font-bold bg-slate-800 hover:bg-rose-500/10 hover:text-rose-400 hover:border-rose-500/20 border border-white/5 text-slate-400 rounded-lg transition-all cursor-pointer"
+                >
+                  {appLanguage === 'pt' ? 'Sair' : appLanguage === 'en' ? 'Sign Out' : 'Salir'}
+                </button>
+              </div>
+            ) : (
+              <div className="mb-4 bg-slate-950/40 p-3 rounded-xl border border-white/5 flex flex-col gap-2">
+                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                  {appLanguage === 'pt' ? 'Login com o Google' : appLanguage === 'en' ? 'Google Sign-In' : 'Login con Google'}
+                </p>
+                
+                {/* Google Sign In official button div */}
+                <div id="google-signin-btn" className="w-full flex justify-center empty:hidden" />
+
+                {/* Simulated Google Button if Client ID is not configured (sandbox preview) */}
+                {!(import.meta as any).env.VITE_GOOGLE_CLIENT_ID && (
+                  <div className="flex flex-col gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowMockGoogleLogin(!showMockGoogleLogin)}
+                      className="w-full py-2 px-3 bg-white hover:bg-slate-50 text-slate-900 rounded-xl font-bold text-xs flex items-center justify-center gap-2 shadow transition-all cursor-pointer"
+                    >
+                      <svg className="h-4 w-4 shrink-0" viewBox="0 0 24 24" width="24" height="24">
+                        <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                        <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                        <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
+                        <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
+                      </svg>
+                      <span>{appLanguage === 'pt' ? 'Conectar via Google' : appLanguage === 'en' ? 'Connect via Google' : 'Conectar via Google'}</span>
+                    </button>
+
+                    {showMockGoogleLogin && (
+                      <div className="bg-slate-900 border border-white/5 rounded-xl p-2 mt-1 flex flex-col gap-1.5 animate-fadeIn">
+                        <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wide px-1">
+                          {appLanguage === 'pt' ? 'Selecione uma conta de demonstração:' : appLanguage === 'en' ? 'Select a demo account:' : 'Seleccione una cuenta:'}
+                        </p>
+                        
+                        {[
+                          { name: 'Ronaldo Santos', email: 'ronaldo.praise@gmail.com', avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=120&q=80' },
+                          { name: 'Eunice Oliveira', email: 'eunice.music@gmail.com', avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=120&q=80' },
+                          { name: 'Gabriel Mendes', email: 'gabriel.sing@gmail.com', avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=120&q=80' }
+                        ].map((mockUser) => (
+                          <button
+                            key={mockUser.email}
+                            type="button"
+                            onClick={() => {
+                              handleGoogleLoginSuccess({
+                                name: mockUser.name,
+                                picture: mockUser.avatar,
+                                email: mockUser.email
+                              });
+                              setShowMockGoogleLogin(false);
+                            }}
+                            className="w-full text-left p-1.5 hover:bg-white/5 rounded-lg flex items-center gap-2 transition-all cursor-pointer group"
+                          >
+                            <img src={mockUser.avatar} alt={mockUser.name} className="h-6 w-6 rounded-full object-cover border border-white/10 group-hover:border-amber-500 transition-colors" />
+                            <div className="min-w-0">
+                              <p className="text-[11px] font-bold text-slate-100 group-hover:text-amber-400 transition-colors truncate">{mockUser.name}</p>
+                              <p className="text-[9px] text-slate-400 truncate">{mockUser.email}</p>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
             
             {/* Avatar Preview */}
             <div className="flex flex-col items-center gap-2 mb-4">

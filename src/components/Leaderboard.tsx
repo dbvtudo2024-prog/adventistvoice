@@ -402,23 +402,25 @@ export default function Leaderboard({
               </div>
             </div>
 
-            <div className="overflow-x-auto w-full">
-              <table className="w-full text-left border-collapse min-w-[500px]">
+            <div className="overflow-x-auto w-full scrollbar-none">
+              <table className="w-full text-left border-collapse table-auto">
                 <thead>
                   <tr className="bg-slate-950/40 text-slate-400 border-b border-white/5 text-[9px] sm:text-[10px] tracking-wider uppercase font-extrabold">
-                    <th className="py-2.5 px-3 sm:py-3 sm:px-4">
-                      {appLanguage === 'pt' ? 'Posição' : appLanguage === 'en' ? 'Rank' : 'Posición'}
+                    <th className="py-2.5 px-1.5 sm:py-3 sm:px-4 w-[12%] text-center sm:text-left">
+                      {appLanguage === 'pt' ? 'Pos.' : appLanguage === 'en' ? 'Rank' : 'Pos.'}
                     </th>
-                    <th className="py-2.5 px-3 sm:py-3 sm:px-4">
+                    <th className="py-2.5 px-1.5 sm:py-3 sm:px-4">
                       {appLanguage === 'pt' ? 'Cantor' : appLanguage === 'en' ? 'Singer' : 'Cantor'}
                     </th>
-                    <th className="py-2.5 px-3 sm:py-3 sm:px-4">
-                      {appLanguage === 'pt' ? 'Recorde Hinário' : appLanguage === 'en' ? 'Hymnal High' : 'Himnario Récord'}
+                    <th className="py-2.5 px-1.5 sm:py-3 sm:px-4 text-center sm:text-left">
+                      <span className="hidden sm:inline">{appLanguage === 'pt' ? 'Recorde Hinário' : appLanguage === 'en' ? 'Hymnal High' : 'Himnario Récord'}</span>
+                      <span className="sm:hidden">{appLanguage === 'pt' ? 'Hinário' : appLanguage === 'en' ? 'Hymnal' : 'Himnario'}</span>
                     </th>
-                    <th className="py-2.5 px-3 sm:py-3 sm:px-4">
-                      {appLanguage === 'pt' ? 'Recorde CD Jovem' : appLanguage === 'en' ? 'Youth CD High' : 'CD Joven Récord'}
+                    <th className="py-2.5 px-1.5 sm:py-3 sm:px-4 text-center sm:text-left">
+                      <span className="hidden sm:inline">{appLanguage === 'pt' ? 'Recorde CD Jovem' : appLanguage === 'en' ? 'Youth CD High' : 'CD Joven Récord'}</span>
+                      <span className="sm:hidden">{appLanguage === 'pt' ? 'CD Jovem' : appLanguage === 'en' ? 'CD Youth' : 'CD Joven'}</span>
                     </th>
-                    <th className="py-2.5 px-3 sm:py-3 sm:px-4 text-right">
+                    <th className="py-2.5 px-1.5 sm:py-3 sm:px-4 text-right">
                       {appLanguage === 'pt' ? 'Ação' : appLanguage === 'en' ? 'Action' : 'Acción'}
                     </th>
                   </tr>
@@ -440,51 +442,51 @@ export default function Leaderboard({
                           key={comp.name}
                           className="hover:bg-slate-950/20 transition-colors align-middle"
                         >
-                          <td className="py-3 px-3 sm:px-4 font-mono font-bold text-xs sm:text-sm">
+                          <td className="py-3 px-1.5 sm:px-4 text-center sm:text-left font-mono font-bold text-xs sm:text-sm">
                             {isPodium ? (
                               <span className={`inline-flex items-center gap-1 ${medalColors[index]}`}>
                                 🏆 {index + 1}
                               </span>
                             ) : (
-                              <span className="text-slate-500 pl-3 sm:pl-4">{index + 1}</span>
+                              <span className="text-slate-500">{index + 1}</span>
                             )}
                           </td>
-                          <td className="py-3 px-3 sm:px-4">
-                            <div className="flex items-center gap-2.5 sm:gap-3">
-                              <span className="text-xl sm:text-2xl bg-slate-950/60 h-7 w-7 sm:h-8 sm:w-8 rounded-full flex items-center justify-center border border-white/5 shadow-inner overflow-hidden">
+                          <td className="py-3 px-1.5 sm:px-4">
+                            <div className="flex items-center gap-1.5 sm:gap-3">
+                              <span className="text-sm sm:text-2xl bg-slate-950/60 h-6 w-6 sm:h-8 sm:w-8 rounded-full flex items-center justify-center border border-white/5 shadow-inner overflow-hidden shrink-0">
                                 {comp.avatar && (comp.avatar.startsWith('data:') || comp.avatar.startsWith('http')) ? (
                                   <img src={comp.avatar} alt={comp.name} className="h-full w-full object-cover" referrerPolicy="no-referrer" />
                                 ) : (
                                   comp.avatar
                                 )}
                               </span>
-                              <div>
-                                <p className="text-xs sm:text-sm font-bold text-white flex items-center gap-1.5">
-                                  {comp.name}
+                              <div className="min-w-0">
+                                <p className="text-xs sm:text-sm font-bold text-white flex flex-wrap items-center gap-1 truncate">
+                                  <span>{comp.name}</span>
                                   {comp.isCustom && (
-                                    <span className="text-[8px] bg-amber-500/10 border border-amber-500/20 px-1 rounded text-amber-500 font-semibold uppercase tracking-wider">
+                                    <span className="text-[7px] sm:text-[8px] bg-amber-500/10 border border-amber-500/20 px-1 rounded text-amber-500 font-semibold uppercase tracking-wider">
                                       Amigo
                                     </span>
                                   )}
                                 </p>
-                                <p className="text-[9px] sm:text-[10px] text-slate-400">
+                                <p className="text-[9px] sm:text-[10px] text-slate-400 hidden sm:block">
                                   {appLanguage === 'pt' ? 'Membro desde' : appLanguage === 'en' ? 'Member since' : 'Miembro desde'} {comp.joinedDate}
                                 </p>
                               </div>
                             </div>
                           </td>
-                          <td className="py-3 px-3 sm:px-4">
+                          <td className="py-3 px-1.5 sm:px-4 text-center sm:text-left">
                             <span className="text-xs font-mono font-bold text-slate-200">
                               {comp.hymnalHighscore > 0 ? `${comp.hymnalHighscore} pts` : '-'}
                             </span>
                           </td>
-                          <td className="py-3 px-3 sm:px-4">
+                          <td className="py-3 px-1.5 sm:px-4 text-center sm:text-left">
                             <span className="text-xs font-mono font-bold text-slate-200">
                               {comp.youthHighscore > 0 ? `${comp.youthHighscore} pts` : '-'}
                             </span>
                           </td>
-                          <td className="py-3 px-3 sm:px-4 text-right">
-                            <div className="flex items-center justify-end gap-3">
+                          <td className="py-3 px-1.5 sm:px-4 text-right">
+                            <div className="flex items-center justify-end gap-1.5 sm:gap-3">
                               <span className="hidden sm:inline-flex items-center gap-1 text-[11px] font-bold text-amber-500">
                                 <Trophy className="h-3 w-3 text-amber-400" />
                                 {appLanguage === 'pt' ? 'Competindo' : appLanguage === 'en' ? 'Competing' : 'Compitiendo'}
@@ -502,7 +504,7 @@ export default function Leaderboard({
                                         className="inline-flex items-center gap-1 px-1.5 py-0.5 sm:px-2 sm:py-1 bg-rose-500/20 text-rose-400 border border-rose-500/30 rounded-lg text-[9px] sm:text-[10px] font-bold hover:bg-rose-500/30 transition-all cursor-pointer shadow shadow-rose-500/10"
                                       >
                                         <Check className="h-2.5 w-2.5" />
-                                        <span>{appLanguage === 'pt' ? 'Confirmar' : appLanguage === 'en' ? 'Confirm' : 'Confirmar'}</span>
+                                        <span>{appLanguage === 'pt' ? 'Ok' : appLanguage === 'en' ? 'Ok' : 'Ok'}</span>
                                       </button>
                                       <button
                                         onClick={() => setDeleteConfirmName(null)}
@@ -581,26 +583,26 @@ export default function Leaderboard({
             </div>
 
             {history.length > 0 ? (
-              <div className="overflow-x-auto pb-4 w-full">
-                <table className="w-full text-left border-collapse min-w-[550px]">
+              <div className="overflow-x-auto w-full scrollbar-none">
+                <table className="w-full text-left border-collapse table-auto">
                   <thead>
                     <tr className="bg-slate-950/40 text-slate-400 border-b border-white/5 text-[9px] sm:text-[10px] tracking-wider uppercase font-extrabold">
-                      <th className="py-2.5 px-3 sm:py-3 sm:px-4">
+                      <th className="py-2.5 px-1.5 sm:py-3 sm:px-4">
                         {appLanguage === 'pt' ? 'Música / Louvor' : appLanguage === 'en' ? 'Song / Praise' : 'Canción / Alabanza'}
                       </th>
-                      <th className="py-2.5 px-3 sm:py-3 sm:px-4">
+                      <th className="py-2.5 px-1.5 sm:py-3 sm:px-4 hidden sm:table-cell">
                         {appLanguage === 'pt' ? 'Cantor' : appLanguage === 'en' ? 'Singer' : 'Cantor'}
                       </th>
-                      <th className="py-2.5 px-3 sm:py-3 sm:px-4">
-                        {appLanguage === 'pt' ? 'Pontuação' : appLanguage === 'en' ? 'Score' : 'Puntuación'}
+                      <th className="py-2.5 px-1.5 sm:py-3 sm:px-4">
+                        {appLanguage === 'pt' ? 'Pontos' : appLanguage === 'en' ? 'Score' : 'Puntos'}
                       </th>
-                      <th className="py-2.5 px-3 sm:py-3 sm:px-4">
+                      <th className="py-2.5 px-1.5 sm:py-3 sm:px-4 hidden xs:table-cell">
                         {appLanguage === 'pt' ? 'Precisão' : appLanguage === 'en' ? 'Accuracy' : 'Precisión'}
                       </th>
-                      <th className="py-2.5 px-3 sm:py-3 sm:px-4">
+                      <th className="py-2.5 px-1.5 sm:py-3 sm:px-4">
                         {appLanguage === 'pt' ? 'Avaliação' : appLanguage === 'en' ? 'Rating' : 'Evaluación'}
                       </th>
-                      <th className="py-2.5 px-3 sm:py-3 sm:px-4 text-right">
+                      <th className="py-2.5 px-1.5 sm:py-3 sm:px-4 text-right">
                         {appLanguage === 'pt' ? 'Data' : appLanguage === 'en' ? 'Date' : 'Fecha'}
                       </th>
                     </tr>
@@ -610,23 +612,26 @@ export default function Leaderboard({
                       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
                       .map((record) => (
                         <tr key={record.id} className="hover:bg-white/[0.02] transition-colors align-middle">
-                          <td className="py-3 px-3 sm:px-4">
+                          <td className="py-3 px-1.5 sm:px-4">
                             <p className="text-xs sm:text-sm font-bold text-white serif-font">{record.songTitle}</p>
-                            <span className="inline-flex items-center gap-1 text-[9px] sm:text-[10px] text-slate-400 font-semibold uppercase mt-0.5">
+                            <span className="sm:hidden block text-[10px] text-amber-400 font-semibold mt-0.5">
+                              Por {record.userName}
+                            </span>
+                            <span className="hidden sm:inline-flex items-center gap-1 text-[9px] sm:text-[10px] text-slate-400 font-semibold uppercase mt-0.5">
                               ⭐ {appLanguage === 'pt' ? 'Hino / Música' : appLanguage === 'en' ? 'Hymn / Song' : 'Himno / Canción'}
                             </span>
                           </td>
-                          <td className="py-3 px-3 sm:px-4 text-xs font-semibold text-slate-300">
+                          <td className="py-3 px-1.5 sm:px-4 text-xs font-semibold text-slate-300 hidden sm:table-cell">
                             {record.userName}
                           </td>
-                          <td className="py-3 px-3 sm:px-4 text-xs sm:text-sm font-mono font-black text-amber-500">
+                          <td className="py-3 px-1.5 sm:px-4 text-xs sm:text-sm font-mono font-black text-amber-500">
                             {record.score} pts
                           </td>
-                          <td className="py-3 px-3 sm:px-4 text-xs font-mono text-emerald-400 font-bold">
+                          <td className="py-3 px-1.5 sm:px-4 text-xs font-mono text-emerald-400 font-bold hidden xs:table-cell">
                             {record.accuracy}%
                           </td>
-                          <td className="py-3 px-3 sm:px-4 text-xs">
-                            <div className="flex gap-0.5">
+                          <td className="py-3 px-1.5 sm:px-4 text-xs">
+                            <div className="hidden sm:flex gap-0.5">
                               {Array.from({ length: 5 }).map((_, i) => (
                                 <Star
                                   key={i}
@@ -638,16 +643,22 @@ export default function Leaderboard({
                                 />
                               ))}
                             </div>
+                            <div className="sm:hidden flex items-center gap-0.5 font-mono text-amber-500 font-bold">
+                              <Star className="h-3.5 w-3.5 text-amber-500 fill-amber-500" />
+                              <span>{record.stars}</span>
+                            </div>
                           </td>
-                          <td className="py-3 px-3 sm:px-4 text-right text-[9px] sm:text-[10px] text-slate-400 font-medium">
+                          <td className="py-3 px-1.5 sm:px-4 text-right text-[9px] sm:text-[10px] text-slate-400 font-medium">
                             <span className="flex items-center justify-end gap-1 font-mono">
-                              <Calendar className="h-3 w-3 text-amber-500" />
-                              {new Date(record.date).toLocaleDateString(appLanguage === 'pt' ? 'pt-BR' : appLanguage === 'en' ? 'en-US' : 'es-ES', {
-                                day: '2-digit',
-                                month: '2-digit',
-                                hour: '2-digit',
-                                minute: '2-digit',
-                              })}
+                              <Calendar className="h-3 w-3 text-amber-500 shrink-0" />
+                              <span className="truncate">
+                                {new Date(record.date).toLocaleDateString(appLanguage === 'pt' ? 'pt-BR' : appLanguage === 'en' ? 'en-US' : 'es-ES', {
+                                  day: '2-digit',
+                                  month: '2-digit',
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                })}
+                              </span>
                             </span>
                           </td>
                         </tr>

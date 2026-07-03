@@ -50,3 +50,49 @@ ON public.custom_songs
 FOR DELETE 
 TO public 
 USING (true);
+
+
+-- ====================================================================
+-- 4. Create and configure storage bucket for audio files ("song-audios")
+-- ====================================================================
+
+-- Create a public storage bucket for audio files
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('song-audios', 'song-audios', true)
+ON CONFLICT (id) DO NOTHING;
+
+-- Note: RLS is already enabled on storage.objects by default in Supabase.
+-- Attempting to run ALTER TABLE storage.objects will result in an ownership error.
+
+-- Create policies for public access on "song-audios" bucket
+-- Note: We use bucket_id = 'song-audios' to isolate permission scope.
+
+-- Allow anyone to read/download song audios
+CREATE POLICY "Allow public read access to song-audios"
+ON storage.objects
+FOR SELECT
+TO public
+USING (bucket_id = 'song-audios');
+
+-- Allow anyone to upload new song audios
+CREATE POLICY "Allow public upload access to song-audios"
+ON storage.objects
+FOR INSERT
+TO public
+WITH CHECK (bucket_id = 'song-audios');
+
+-- Allow anyone to update/overwrite song audios (important for upserting)
+CREATE POLICY "Allow public update access to song-audios"
+ON storage.objects
+FOR UPDATE
+TO public
+USING (bucket_id = 'song-audios')
+WITH CHECK (bucket_id = 'song-audios');
+
+-- Allow anyone to delete song audios
+CREATE POLICY "Allow public delete access to song-audios"
+ON storage.objects
+FOR DELETE
+TO public
+USING (bucket_id = 'song-audios');
+
