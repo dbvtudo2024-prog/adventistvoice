@@ -153,6 +153,13 @@ async function startServer() {
     }
   });
 
+  // API route to get config values dynamically at runtime
+  app.get("/api/config", (req, res) => {
+    res.json({
+      googleClientId: process.env.VITE_GOOGLE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID || ""
+    });
+  });
+
   // API routes for projector sync
   app.post("/api/projector/sync", (req, res) => {
     // Merge any properties received in the body to make the sync fully flexible

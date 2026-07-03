@@ -105,6 +105,22 @@ export default function App() {
     }
   });
   const [showMockGoogleLogin, setShowMockGoogleLogin] = useState(false);
+  const [googleClientId, setGoogleClientId] = useState<string>('');
+
+  // Fetch dynamic configurations from server on mount
+  useEffect(() => {
+    fetch('/api/config')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.googleClientId) {
+          setGoogleClientId(data.googleClientId);
+          console.log('Google Client ID fetched successfully:', data.googleClientId);
+        }
+      })
+      .catch((err) => {
+        console.error('Failed to fetch config from server:', err);
+      });
+  }, []);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent | TouchEvent) {
@@ -548,7 +564,7 @@ export default function App() {
     let attempts = 0;
 
     const initGsi = () => {
-      const client_id = (import.meta as any).env.VITE_GOOGLE_CLIENT_ID || '';
+      const client_id = googleClientId || (import.meta as any).env.VITE_GOOGLE_CLIENT_ID || '';
       if (!client_id) return;
 
       const googleObj = (window as any).google;
@@ -587,7 +603,7 @@ export default function App() {
 
     initInterval = window.setInterval(initGsi, 200);
     return () => clearInterval(initInterval);
-  }, [isEditingProfile]);
+  }, [isEditingProfile, googleClientId]);
 
   // Triggered when user successfully finishes a song on KaraokeStage
   const handleSaveNewScore = (newRecord: ScoreRecord) => {
@@ -1068,7 +1084,7 @@ export default function App() {
                 <div id="google-signin-btn" className="w-full flex justify-center empty:hidden" />
 
                 {/* Simulated Google Button if Client ID is not configured (sandbox preview) */}
-                {!(import.meta as any).env.VITE_GOOGLE_CLIENT_ID && (
+                {!googleClientId && !(import.meta as any).env.VITE_GOOGLE_CLIENT_ID && (
                   <div className="flex flex-col gap-2">
                     <button
                       type="button"
