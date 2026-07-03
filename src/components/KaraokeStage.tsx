@@ -44,10 +44,18 @@ export default function KaraokeStage({ song, onExit, currentUser, onSaveScore }:
         setIsAudioLoaded(false);
         setAudioDuration(null);
       };
+    } else if (song.audioUrl) {
+      setStageAudioUrl(song.audioUrl);
+      setIsAudioLoaded(true);
+      return () => {
+        setStageAudioUrl(null);
+        setIsAudioLoaded(false);
+        setAudioDuration(null);
+      };
     } else {
       setAudioDuration(null);
     }
-  }, [stageAudioFile]);
+  }, [stageAudioFile, song.audioUrl]);
 
   // Audio Context & stream references
   const audioContextRef = useRef<AudioContext | null>(null);

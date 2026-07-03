@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS public.custom_songs (
   melody JSONB NOT NULL,
   description TEXT,
   language TEXT,
+  audio_url TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 

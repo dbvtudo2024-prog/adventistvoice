@@ -541,6 +541,11 @@ export default function AdminManager({
       const url = URL.createObjectURL(song.audioFile);
       setAudioUrl(url);
       setUseVirtualPlayer(false);
+    } else if (song.audioUrl) {
+      setAudioFile(null);
+      if (audioUrl) URL.revokeObjectURL(audioUrl);
+      setAudioUrl(song.audioUrl);
+      setUseVirtualPlayer(false);
     } else {
       setAudioFile(null);
       if (audioUrl) URL.revokeObjectURL(audioUrl);

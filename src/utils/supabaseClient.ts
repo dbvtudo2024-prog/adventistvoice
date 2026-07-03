@@ -85,6 +85,7 @@ export async function fetchCustomSongsClient(): Promise<Song[]> {
     melody: song.melody,
     description: song.description,
     language: song.language,
+    audioUrl: song.audio_url || undefined,
   }));
 }
 
@@ -106,6 +107,7 @@ export async function saveCustomSongsClient(songs: Song[]): Promise<boolean> {
     melody: song.melody,
     description: song.description || null,
     language: song.language || null,
+    audio_url: song.audioUrl || null,
   }));
 
   const { error } = await supabase
@@ -117,4 +119,33 @@ export async function saveCustomSongsClient(songs: Song[]): Promise<boolean> {
   }
 
   return true;
+}
+
+// Client-side upload audio to Supabase Storage Bucket
+export async function uploadSongAudioClient(songId: string, file: File): Promise<string> {
+  const supabase = getSupabaseClient();
+  if (!supabase) throw new Error("Supabase is not configured on the client.");
+
+  // Prepare a clean filename
+  const cleanExt = file.name.split('.').pop() || 'mp3';
+  const filePath = `${songId}.${cleanExt}`;
+
+  // Upload to public 'song-audios' bucket
+  const { error: uploadError } = await supabase.storage
+    .from('song-audios')
+    .upload(filePath, file, {
+      upsert: true,
+      contentType: file.type || 'audio/mpeg'
+    });
+
+  if (uploadError) {
+    throw uploadError;
+  }
+
+  // Retrieve public link URL
+  const { data } = supabase.storage
+    .from('song-audios')
+    .getPublicUrl(filePath);
+
+  return data.publicUrl;
 }

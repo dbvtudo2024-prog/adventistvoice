@@ -265,22 +265,49 @@ export default function App() {
       }
     }).catch(err => console.error("Falha ao salvar/deletar áudios do IndexedDB:", err));
 
-    setCustomSongs(newSongs);
-
     try {
+      // Se o Supabase estiver configurado diretamente no client-side, faz o upload dos áudios para o Storage
+      if (isSupabaseConfiguredClient()) {
+        console.log("Supabase configurado no cliente. Verificando uploads de áudio pendentes...");
+        const { uploadSongAudioClient } = await import('./utils/supabaseClient');
+        
+        const uploadedSongs = await Promise.all(newSongs.map(async (song) => {
+          if (song.audioFile) {
+            try {
+              console.log(`Fazendo upload do áudio da música: ${song.title}...`);
+              const publicUrl = await uploadSongAudioClient(song.id, song.audioFile);
+              console.log(`Upload concluído com sucesso! URL pública: ${publicUrl}`);
+              return { ...song, audioUrl: publicUrl };
+            } catch (err) {
+              console.error(`Falha ao subir áudio para o Supabase Storage para a música "${song.title}":`, err);
+              return song;
+            }
+          }
+          return song;
+        }));
+
+        setCustomSongs(uploadedSongs);
+
+        // Remove o campo 'audioFile' (objeto binário brutos) antes de serializar em texto
+        const songsToSerialize = uploadedSongs.map(s => {
+          const { audioFile, ...rest } = s;
+          return rest;
+        });
+        localStorage.setItem('adventist_karaoke_custom_songs', JSON.stringify(songsToSerialize));
+
+        console.log("Salvando metadados no custom_songs com URLs de áudio...", songsToSerialize);
+        await saveCustomSongsClient(songsToSerialize);
+        return { success: true, database: 'supabase' };
+      }
+
+      setCustomSongs(newSongs);
+
       // Remove o campo 'audioFile' (objeto binário brutos) antes de serializar em texto no localStorage
       const songsToSerialize = newSongs.map(s => {
         const { audioFile, ...rest } = s;
         return rest;
       });
       localStorage.setItem('adventist_karaoke_custom_songs', JSON.stringify(songsToSerialize));
-
-      // Se o Supabase estiver configurado diretamente no client-side, faz a gravação direta
-      if (isSupabaseConfiguredClient()) {
-        console.log("Supabase configured on client. Saving directly...");
-        await saveCustomSongsClient(songsToSerialize);
-        return { success: true, database: 'supabase' };
-      }
 
       // Senão, sincroniza com o servidor Express
       const res = await fetch('/api/custom-songs', {

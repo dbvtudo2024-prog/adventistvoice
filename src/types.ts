@@ -27,6 +27,7 @@ export interface Song {
   melody: MelodyNote[];
   description?: string;
   audioFile?: File;
+  audioUrl?: string;
   language?: SongLanguage;
 }
 
